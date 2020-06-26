@@ -7,25 +7,18 @@
 The soft modem reference board is ST Microelectronics NucleoL073 + Semtech SX1280 dev kit board
 
 ### Supported Radios  
-sx1280 radio is used in case of WW2G4 region  
+Semtech sx1280 
 
 ----
-## LoRaWAN  
+## PROTOCOL  
 
 ### Version  
-The LoRaWAN version that is currently implemented in the modem is: 1.0.3
-
-### Supported Regions  
-* WW2G4  
+The protocol version that is currently implemented in the modem emulates LoRaWAN 1.0.3 at 2.4GHz
 
 ----
 ## Supported Modem Services 
 
 ### Large files upload
-
-### ROSE Streaming
-
-### Alc_sync - Clock synchronization
 
 # Build options
 
@@ -42,11 +35,7 @@ Clean the current build directories:
 >make clean
 
 ----
-## Multiple targets options
-
-There are 4 targets that can be built with the Makefile:
-
-### Soft Modem 2G4  
+## Soft Modem 2G4  
 >make modem_2_4  
 
 The Binary file will like: `/build/build_modem_2_4/soft_modem_2g4.bin`
