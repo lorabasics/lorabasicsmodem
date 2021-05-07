@@ -161,7 +161,7 @@ void sha256( uint32_t* hash, const uint8_t* msg, uint32_t len )
     }
 }
 
-uint32_t crc( uint8_t* buf, int len )
+uint32_t crc( const uint8_t* buf, int len )
 {
     uint32_t crc = 0xFFFFFFFF;
     while( len-- > 0 )
@@ -174,4 +174,16 @@ uint32_t crc( uint8_t* buf, int len )
         }
     }
     return ~crc;
+}
+uint32_t compute_crc_fw( void )
+{
+#if defined( LR1110_MODEM )
+    uint32_t crctmp =
+        crc( ( uint8_t* ) ( START_FLASH_ADRESS ),
+             ( *( uint32_t* ) FLASH_PROG_LEN ) * 4 );  // prog length in word is store in start_fw_flash_address
+    return crctmp;
+#else
+#warning "compute_crc_fw NOT YET IMPLEMENTED"
+    return 0;
+#endif  // LR1110_MODEM
 }

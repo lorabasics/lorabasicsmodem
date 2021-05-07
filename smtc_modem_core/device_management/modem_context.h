@@ -40,11 +40,12 @@ extern "C" {
  * -----------------------------------------------------------------------------
  * --- DEPENDENCIES ------------------------------------------------------------
  */
-
-#include "smtc_bsp.h"
+#include "smtc_modem_api.h"
+#include "smtc_modem_hal.h"
 #include "device_management_defs.h"
-#include "modem_supervisor.h"
 #include "lr1mac_defs.h"
+#include "alc_sync.h"
+#include "radio_planner.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -52,23 +53,51 @@ extern "C" {
  */
 
 #define DEFAULT_DM_PORT 199
+#define DEFAULT_FRAG_PORT 201
 #define DEFAULT_DM_REPORTING_INTERVAL 0x81  // 1h
 #define DEFAULT_DM_REPORTING_FIELDS 0x7B    // status, charge, temp, signal, uptime, rxtime
 #define DEFAULT_DM_MUTE_DAY 0
+#define DEFAULT_ADR_MOBILE_MODE_TIMEOUT 255
+
 #define UPLOAD_SID 0
 
 #define DM_STATUS_NOW_MIN_TIME 2
 #define DM_STATUS_NOW_MAX_TIME 5
+
+#define POWER_CONFIG_LUT_SIZE 6
+
+#define MODEM_NUMBER_OF_EVENTS 16  // number of possible events in modem
+
+typedef enum charge_counter_value_e
+{
+    CHARGE_COUNTER_MODEM       = 0,
+    CHARGE_COUNTER_USER_DEFINE = 1,
+} charge_counter_value_t;
 
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
 
+typedef struct power_config_e
+{
+    int8_t  expected_power;
+    int8_t  configured_power;
+    uint8_t pa_param1;
+    uint8_t pa_param2;
+    uint8_t pa_ramp_time;
+} modem_power_config_t;
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
  */
+
+/*!
+ * \brief   init modem context
+ * \retval  void
+ */
+void modem_context_init( );
 
 /*!
  * \brief  Init events data
@@ -77,45 +106,39 @@ extern "C" {
 void modem_event_init( void );
 
 /*!
- * \brief  for each type of asynchronous message have to manage a counter in case of overrun
- * \param   [in]  event_type                - type of asynchronous message
- * \retval int8_t                    - Return the number of asynchronous event for this type
- *                                            of event since the last get event cmd
+ * \brief For each type of asynchronous message have to manage a counter in case of overrun
+ *
+ * \param [in] event_type Type of asynchronous message
+ *
+ * \return The number of asynchronous events for this type of event since the last get event cmd
  */
-uint8_t get_modem_event_count( modem_rsp_event_t event_type );
+uint8_t get_modem_event_count( uint8_t event_type );
+
+/*!
+ * \brief For each type of asynchronous message have to manage a status
+ *
+ * \param [in] event_type  type of asynchronous message
+ *
+ * \return The last status of asynchronous event for this type of event since the last get event cmd
+ */
+uint8_t get_modem_event_status( uint8_t event_type );
 
 /*!
  * \brief set a value in the counter of a type of asynchronous event
- * \param   [in]  event_type                - type of asynchronous message
- * \param   [in]  value                     - value's type of asynchronous message
- * \retval void
+ *
+ * \param [in] event_type type of asynchronous message
+ * \param [in] value      value's type of asynchronous message
+ * \param [in] status     status of asynchronous message
  */
-void set_modem_event_count( modem_rsp_event_t event_type, uint8_t value );
+void set_modem_event_count_and_status( uint8_t event_type, uint8_t value, uint8_t status );
 
 /*!
  * \brief increment the counter of a type of asynchronous event
- * \param   [in]  event_type                - type of asynchronous message
- * \retval void
+ *
+ * \param [in] event_type type of asynchronous message
+ * \param [in] status     status of asynchronous message
  */
-void increment_modem_event_count( modem_rsp_event_t event_type );
-
-/*!
- * \brief  for each type of asynchronous message have to manage a status
- * \remark
- * \param   [in]  event_type                - type of asynchronous message
- * \retval int8_t                    - return the last status of asynchronous event for this type
- *                                            of event since the last get event cmd
- */
-uint8_t get_modem_event_status( modem_rsp_event_t event_type );
-
-/*!
- * \brief set a value in the status of a type of asynchronous event
- * \remark
- * \param   [in]  event_type                    - type of asynchronous message
- * \param   [in]  status                        - status of asynchronous message
- * \retval void
- */
-void set_modem_event_status( modem_rsp_event_t event_type, uint8_t status );
+void increment_modem_event_count_and_status( uint8_t event_type, uint8_t status );
 
 /*!
  * \brief decrement the asynchronous message number
@@ -125,21 +148,23 @@ void decrement_asynchronous_msgnumber( void );
 
 /*!
  * \brief increment the asynchronous message number
- * \param   [in] event_type                     - type of asynchronous message
- * \param   [in] status                         - status of asynchronous message
- * \retval void
+ *
+ * \param [in] event_type type of asynchronous message
+ * \param [in] status     status of asynchronous message
  */
-void increment_asynchronous_msgnumber( modem_rsp_event_t event_type, uint8_t status );
+void increment_asynchronous_msgnumber( uint8_t event_type, uint8_t status );
 
 /*!
  * \brief get the last message event
- * \retval modem_rsp_event_t             - Return the last modem_rsp_event_t
+ *
+ * \return The last modem event
  */
-modem_rsp_event_t get_last_msg_event( void );
+uint8_t get_last_msg_event( void );
 
 /*!
  * \brief get asynchronous message number
- * \retval uint8_t                       - Return the number of asynchronous message
+ *
+ * \return The number of asynchronous message
  */
 uint8_t get_asynchronous_msgnumber( void );
 
@@ -181,18 +206,18 @@ uint32_t get_modem_dm_interval_second( void );
  * \brief   Set the modem LoRaWAN Class
  * \remark  This command set the LoRaWAN device class.
  *
- * \param   [in]    LoRaWAN_class       - modem_class_t
+ * \param   [in]    LoRaWAN_class       - smtc_modem_class_t
  * \retval   e_set_error_t
  */
-e_set_error_t set_modem_class( modem_class_t LoRaWAN_class );
+e_set_error_t set_modem_class( smtc_modem_class_t LoRaWAN_class );
 
 /*!
  * \brief   Get the modem LoRaWAN Class
  * \remark  This command gets the LoRaWAN device class.
  *
- * \retval   modem_class_t
+ * \retval   smtc_modem_class_t
  */
-modem_class_t get_modem_class( void );
+smtc_modem_class_t get_modem_class( void );
 
 /*!
  * \brief   Set modem DM port
@@ -212,6 +237,14 @@ e_set_error_t set_modem_dm_port( uint8_t port );
 uint8_t get_modem_dm_port( void );
 
 /*!
+ * \brief   Get Fragmentation port
+ * \remark  This command gets the fragmentation port.
+ *
+ * \retval [out]    return                      - Fragmentation port
+ */
+uint8_t get_modem_frag_port( void );
+
+/*!
  * \brief   Set ADR profile
  * \remark  This command sets the ADR profile and parameters.
  *
@@ -220,15 +253,16 @@ uint8_t get_modem_dm_port( void );
  * \param  [in]     adr_custom_length           - ADR custom profile data length
  * \retval [out]    e_set_error_t
  */
-e_set_error_t set_modem_adr_profile( dr_strategy_t user_dr, uint8_t* adr_custom_data, uint8_t adr_custom_length );
+e_set_error_t set_modem_adr_profile( smtc_modem_adr_profile_t adr_profile, const uint8_t* adr_custom_data,
+                                     uint8_t adr_custom_length );
 
 /*!
- * \brief   Get ADR mode
+ * \brief   Get ADR profile
  * \remark  This command returns the ADR profile mode.
  *
- * \retval [out]    dr_strategy_t               - Return adr profile
+ * \retval [out]    smtc_modem_adr_profile_t               - Return adr profile
  */
-dr_strategy_t get_modem_adr( void );
+smtc_modem_adr_profile_t get_modem_adr_profile( void );
 
 /*!
  * \brief   merge the join status of the stack and the "join on going" state of the modem
@@ -244,7 +278,7 @@ eModemJoinState_t get_join_state( void );
  * \param   [out]   app_status*                 - App status payload
  \retval void
  */
-void set_modem_appstatus( uint8_t* app_status );
+void set_modem_appstatus( const uint8_t* app_status );
 
 /*!
  * \brief   Get application-specific status in DM
@@ -280,6 +314,41 @@ uint32_t get_modem_charge_ma_s( void );
 uint32_t get_modem_charge_ma_h( void );
 
 /*!
+ * \brief   Get the modem user define charge mAh
+ * \remark  This command returns the total charge counter of the modem user define in mAh.
+ *          This counter is a read write register for the end user.
+ *          Either this value or get_modem_charge_ma_h will be send with dm message status
+ * \retval   uint32_t                    - Return accumulated charge
+ */
+uint16_t get_modem_user_define_charge_ma_h( void );
+
+/*!
+ * \brief   Set the modem user define charge mAh
+ * \remark  This command set the total charge counter of the modem user define in mAh.
+ * \param   [out]   value   - New user define charge counter value
+ * \retval  void
+ */
+void set_modem_user_define_charge_ma_h( const uint16_t value );
+
+/*!
+ * \brief   Choose modem charge counter to send within DMmessage status
+ * \retval  void
+ */
+void choose_modem_charge_counter( void );
+
+/*!
+ * \brief   Choose user define charge counter to send within DMmessage status
+ * \retval  void
+ */
+void choose_user_define_charge_counter( void );
+
+/*!
+ * \brief   Return which charge counter must be send
+ * \retval  void
+ */
+charge_counter_value_t get_charge_counter_to_send( void );
+
+/*!
  * \brief   Get the modem voltage
  * \remark  This command returns the modem voltage
  *
@@ -293,7 +362,7 @@ uint8_t get_modem_voltage( void );
  *
  * \retval  uint8_t                     - Return modem temperature
  */
-uint8_t get_modem_temp( void );
+int8_t get_modem_temp( void );
 
 /*!
  * \brief   return the modem status
@@ -420,14 +489,14 @@ void set_modem_status_reset_after_crash( bool value );
  */
 void set_modem_status_reset_after_brownout( bool value );
 
-/*!
- * \brief   Set the Downlink frame in modem context
- * \remark  Retrieve the LoRaWAN downlink from stack to set in modem context
- *          Be careful: MUST BE called only on event
+/**
+ * @brief Set the modem downlink frame object
  *
- * \retval void
+ * @param data the downlink data received by the lora stack class A or B or C
+ * @param data_length the downlink data length
+ * @param metadata the downlink metadata (timestamp,rssi,snr and port)
  */
-void set_modem_downlink_frame( void );
+void set_modem_downlink_frame( uint8_t* data, uint8_t data_length, lr1mac_down_metadata_t* metadata );
 
 /*!
  * \brief   Get the Downlink frame in modem context
@@ -453,6 +522,13 @@ void set_dm_retrieve_pending_dl( uint8_t up_count, uint8_t up_delay );
  * \param   [in]    pending_dl                  - s_dm_retrieve_pending_dl_t
  */
 void get_dm_retrieve_pending_dl( s_dm_retrieve_pending_dl_t* pending_dl );
+
+/*!
+ * \brief   Decrement DM retrieve pending downlink frame
+ * \remark  This function decrement the number of requested downlink opportunities
+ *
+ */
+void decrement_dm_retrieve_pending_dl( void );
 
 /*!
  * \brief   check DM Info cmd Size
@@ -525,7 +601,7 @@ uint8_t get_dm_info_tag_list( uint8_t* dm, e_dm_info_rate_t flag );
  *                                                              Else: set bitfield for saved context with SetDmInfo
  * \retval e_set_error_t               - Return SET_ERROR in case of failure, else false SET_OK
  */
-e_set_error_t set_dm_info( uint8_t* requested_info_list, uint8_t len, e_dm_info_rate_t flag );
+e_set_error_t set_dm_info( const uint8_t* requested_info_list, uint8_t len, e_dm_info_rate_t flag );
 
 /*!
  * \brief   DM status messages
@@ -554,9 +630,32 @@ bool dm_status_payload( uint8_t* dm_uplink_message, uint8_t* dm_uplink_message_l
  * \param   [out] dm_uplink_message_len *   - Returned array length
  * checked \retval void
  */
-void dm_alc_sync_uplink_payload( uint32_t alc_sync_time, uint8_t app_time_ans_required, uint8_t force_resync_status,
-                                 uint8_t max_payload_length, uint8_t* dm_uplink_message,
+void dm_alc_sync_uplink_payload( alc_sync_ctx_t* alc_ctx, uint32_t alc_sync_time, uint8_t app_time_ans_required,
+                                 uint8_t force_resync_status, uint8_t max_payload_length, uint8_t* dm_uplink_message,
                                  uint8_t* dm_uplink_message_len );
+
+/*!
+ * \brief   DM Fragmented Data Block uplink payload
+ *
+ * \param   [in]  max_payload_length        - final max length of the constructed payload
+ * \param   [out] dm_uplink_message *       - Returned array that contains one or more concatenated ALC Sync data
+ * \param   [out] dm_uplink_message_len *   - Returned array length
+ * checked \retval void
+ */
+void dm_frag_uplink_payload( uint8_t max_payload_length, uint8_t* dm_uplink_message, uint8_t* dm_uplink_message_len );
+
+#if defined( _GNSS_SNIFF_ENABLE )
+/*!
+ * \brief   DM Almanac debug answer uplink payload
+ *
+ * \param   [in]  max_payload_length        - final max length of the constructed payload
+ * \param   [out] dm_uplink_message *       - Returned array that contains one or more concatenated ALC Sync data
+ * \param   [out] dm_uplink_message_len *   - Returned array length
+ * checked \retval void
+ */
+void dm_alm_dbg_uplink_payload( uint8_t max_payload_length, uint8_t* dm_uplink_message,
+                                uint8_t* dm_uplink_message_len );
+#endif  // _GNSS_SNIFF_ENABLE
 /*!
  * \brief    add a join task in scheduler
  * \remark
@@ -576,16 +675,39 @@ void modem_supervisor_add_task_dm_status( uint32_t next_execute );
 void modem_supervisor_add_task_dm_status_now( void );
 
 /*!
+ * \brief    add a crash log task in scheduler
+ * \remark
+ */
+void modem_supervisor_add_task_crash_log( uint32_t next_execute );
+/*!
  * \brief    add a ALC Sync time request task in scheduler
  * \remark
  */
 void modem_supervisor_add_task_alc_sync_time_req( uint32_t next_execute );
 
 /*!
+ * \brief    remove the last ALC Sync time request task in scheduler
+ * \remark
+ */
+void modem_supervisor_remove_task_alc_sync( void );
+
+/*!
+ * \brief    Is the ALC Sync time task running
+ * \remark
+ */
+bool modem_supervisor_is_alc_sync_running( void );
+
+/*!
  * \brief    add a ALC Sync answer task in scheduler
  * \remark
  */
 void modem_supervisor_add_task_alc_sync_ans( uint32_t next_execute );
+
+/*!
+ * \brief    add a Alm Dbg answer task in scheduler
+ * \remark
+ */
+void modem_supervisor_add_task_alm_dbg_ans( uint32_t next_execute );
 
 /*!
  * \brief    add a DM Mute Task to decrement the number of muted day(s)
@@ -606,12 +728,18 @@ void modem_supervisor_add_task_retrieve_dl( uint32_t next_execute );
 void modem_supervisor_add_task_stream( void );
 
 /*!
+ * \brief    add a fragmented data block task in scheduler
+ * \remark
+ */
+void modem_supervisor_add_task_frag( uint32_t next_execute );
+
+/*!
  * \brief    Set modem Suspend
  * \remark
  * \param   [in]  suspend               - True: Suspend modem, False: un-suspend modem
  * \retval e_set_error_t                   - Return SET_ERROR in case of failure, else false SET_OK
  */
-e_set_error_t set_modem_suspend( e_modem_suspend_t suspend );
+e_set_error_t set_modem_suspend( bool suspend );
 
 /*!
  * \brief    Get modem Suspend status
@@ -761,6 +889,197 @@ bool get_modem_reset_requested( void );
  * \retval  void
  */
 void set_modem_reset_requested( bool reset_req );
+
+/*!
+ * \brief   Get modem RF Output
+ * \retval  rf_output_t
+ */
+rf_output_t modem_get_rfo_pa( void );
+
+/*!
+ * \brief   Set modem RF Output
+ * \param   [in]  rf_output     - rf_output_t
+ * \retval  uint8_t
+ */
+uint8_t modem_set_rfo_pa( rf_output_t rf_output );
+
+/*!
+ * \brief   Set modem duty cycle when disabled by host
+ * \param   [in]  uint8_t     - disabled_by_host
+ */
+void modem_set_duty_cycle_disabled_by_host( uint8_t disabled_by_host );
+
+/*!
+ * \brief   Get modem duty cycle when disabled by host
+ * \param   [in]  uint8_t     - disabled_by_host
+ * \retval  uint8_t
+ */
+uint8_t modem_get_duty_cycle_disabled_by_host( void );
+
+/*!
+ * \brief   Set modem file upload average delay
+ * \param   [in]  uint32_t     - avgdelay_in_s
+ */
+void modem_set_upload_avgdelay( uint32_t avgdelay_in_s );
+
+/*!
+ * \brief   Get modem file upload average delay
+ * \retval  uint32_t
+ */
+uint32_t modem_get_upload_avgdelay( void );
+
+/*!
+ * \brief   Set modem adr mobile timeout config
+ * \param   [in]  uint16_t     - nb_tx
+ */
+void modem_set_adr_mobile_timeout_config( uint16_t nb_tx );
+
+/*!
+ * \brief   Get modem adr mobile timeout config
+ * \retval  uint16_t
+ */
+uint16_t modem_get_adr_mobile_timeout_config( void );
+
+/*!
+ * \brief   Get the current uplink count in mobile adr
+ * \retval  uint16_t
+ */
+uint16_t modem_get_current_adr_mobile_count( void );
+
+/*!
+ * \brief   Reset the current uplink count in mobile adr
+ * \retval  none
+ */
+void modem_reset_current_adr_mobile_count( void );
+
+/*!
+ * \brief   return true when you receive a link adr request from the network
+ * \retval [out]    bool
+ */
+bool modem_available_new_link_adr_request( void );
+
+/*!
+ * \brief   Set modem test mode
+ * \param   [in]  bool     - true/false
+ */
+void modem_set_test_mode_status( bool enable );
+
+/*!
+ * \brief   return true if modem test mode is active
+ * \retval [out]    bool
+ */
+bool modem_get_test_mode_status( void );
+
+/*!
+ * \brief   Set the Rx Pathloss
+ * \remark  This command sets the board-specific correction pathloss for reception
+ *
+ * \param   [in]     rx_pathloss        - Rx pathloss in dB
+ * \retval  None
+ */
+void modem_context_set_rx_pathloss_db( int8_t rx_pathloss );
+
+/*!
+ * \brief   Get the Rx Pathloss
+ * \remark  This command gets the board-specific correction pathloss for reception
+ *
+ * \retval  int8_t
+ */
+int8_t modem_context_get_rx_pathloss_db( void );
+
+/*!
+ * \brief   Set the Tx power offset
+ * \remark  This command sets the board-specific correction offset for transmission power to be used
+ *
+ * \param  [in]     int8_t        - Tx power offset in dB
+ * \retval  None
+ */
+void modem_context_set_tx_power_offset_db( int8_t tx_power_offset );
+
+/*!
+ * \brief   Get the Tx power offset
+ * \remark  This command gets the board-specific correction offset for transmission power to be used
+ *          (signed integer in dB)
+ *
+ * \retval  int8_t
+ */
+int8_t modem_context_get_tx_power_offset_db( void );
+
+/*!
+ * \brief   Get the pointer on the radio planner used by modem
+ *
+ * \retval  radio_planner_t* pointer on used radio planner
+ */
+radio_planner_t* modem_context_get_modem_rp( void );
+
+/*!
+ * \brief   Save in context the pointer on the radio planner used by modem
+ *
+ * \param  [in]     radio_planner_t*        - the pointer on radio planner
+ * \retval  none
+ */
+void modem_context_set_modem_rp( radio_planner_t* rp );
+
+/*!
+ * \brief   suspend radio access
+ * \remark  This command must be moved to a better place of code (modem_engine for instance)
+ *
+ * \retval  true if operation was ok, false otherwise
+ */
+bool modem_context_suspend_radio_access( void );
+
+/*!
+ * \brief   resume radio access
+ * \remark  This command must be moved to a better place of code (modem_engine for instance)
+ *
+ * \retval  true if operation was ok, false otherwise
+ */
+bool modem_context_resume_radio_access( void );
+
+/*!
+ * \brief   Set the power config lut
+ * \remark  This command sets the internal power config look up table
+ *
+ * \param  [in]     config        - the 30 bytes buffer received from user
+ * \retval  None
+ */
+void modem_context_set_power_config_lut( uint8_t config[30] );
+
+/*!
+ * \brief   Get the power config lut
+ * \remark  This command returns the pointer on the internal look up table
+ *
+ * \retval  modem_power_config_t *
+ */
+modem_power_config_t* modem_context_get_power_config_lut( void );
+
+/**
+ * @brief Check appkey crc and status. And set them if required
+ *
+ * @param app_key   App key
+ */
+void modem_context_set_appkey( const uint8_t app_key[16] );
+
+/**
+ * @brief Update appkey_crc status to invalid. (because appkey is no longer know)
+ *
+ */
+void modem_context_appkey_is_derived( void );
+
+/**
+ * @brief get network type
+ *
+ * @return true public network
+ * @return false private network
+ */
+bool modem_context_get_network_type( void );
+
+/**
+ * @brief set network_type
+ *
+ * @param network_type
+ */
+void modem_context_set_network_type( bool network_type );
 
 #ifdef __cplusplus
 }

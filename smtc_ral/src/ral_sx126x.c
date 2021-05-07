@@ -1,7 +1,7 @@
 /**
  * @file      ral_sx126x.c
  *
- * @brief     SX126x radio abstraction layer implementation
+ * @brief     Radio abstraction layer definition
  *
  * Revised BSD License
  * Copyright Semtech Corporation 2020. All rights reserved.
@@ -34,10 +34,12 @@
  * --- DEPENDENCIES ------------------------------------------------------------
  */
 
-#include <string.h>  // memcpy
-
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "sx126x.h"
 #include "ral_sx126x.h"
+#include "ral_sx126x_bsp.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -49,6 +51,19 @@
  * --- PRIVATE CONSTANTS -------------------------------------------------------
  */
 
+// TODO: check values
+#define SX126X_GFSK_RX_CONSUMPTION_DCDC 4200
+#define SX126X_GFSK_RX_BOOSTED_CONSUMPTION_DCDC 4800
+
+#define SX126X_GFSK_RX_CONSUMPTION_LDO 8000
+#define SX126X_GFSK_RX_BOOSTED_CONSUMPTION_LDO 9300
+
+#define SX126X_LORA_RX_CONSUMPTION_DCDC 4600
+#define SX126X_LORA_RX_BOOSTED_CONSUMPTION_DCDC 5300
+
+#define SX126X_LORA_RX_CONSUMPTION_LDO 8880
+#define SX126X_LORA_RX_BOOSTED_CONSUMPTION_LDO 10100
+
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE TYPES -----------------------------------------------------------
@@ -59,528 +74,693 @@
  * --- PRIVATE VARIABLES -------------------------------------------------------
  */
 
-const sx126x_lora_bw_t ral_to_sx126x_lora_bw[] = {
-    SX126X_LORA_BW_007,
-    SX126X_LORA_BW_010,
-    SX126X_LORA_BW_015,
-    SX126X_LORA_BW_020,
-    SX126X_LORA_BW_031,
-    SX126X_LORA_BW_041,
-    SX126X_LORA_BW_062,
-    SX126X_LORA_BW_125,
-    0xFF,
-    SX126X_LORA_BW_250,
-    0xFF,
-    SX126X_LORA_BW_500,
-    0xFF,
-    0xFF,
-};
-
-const sx126x_lora_cr_t ral_to_sx126x_lora_cr[] = {
-    SX126X_LORA_CR_4_5, SX126X_LORA_CR_4_6, SX126X_LORA_CR_4_7, SX126X_LORA_CR_4_8, 0xFF, 0xFF, 0xFF,
-};
-
 /*
  * -----------------------------------------------------------------------------
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
-static ral_status_t ral_sx126x_convert_gfsk_params_from_radio( const ral_params_gfsk_t*  params,
-                                                               sx126x_mod_params_gfsk_t* mod_params,
-                                                               sx126x_pkt_params_gfsk_t* pkt_params );
+/**
+ * @brief Convert interrupt flags from SX126x context to RAL context
+ *
+ * @param [in] sx126x_irq  SX126x interrupt status
+ *
+ * @returns RAL interrupt status
+ */
+static ral_irq_t ral_sx126x_convert_irq_flags_to_ral( sx126x_irq_mask_t sx126x_irq );
 
-static ral_status_t ral_sx126x_convert_lora_params_from_radio( const ral_params_lora_t*  params,
-                                                               sx126x_mod_params_lora_t* mod_params,
-                                                               sx126x_pkt_params_lora_t* pkt_params );
+/**
+ * @brief Convert interrupt flags from RAL context to SX126x context
+ *
+ * @param [in] ral_irq RAL interrupt status
+ *
+ * @returns SX126x interrupt status
+ */
+static sx126x_irq_mask_t ral_sx126x_convert_irq_flags_from_ral( ral_irq_t ral_irq );
 
-static ral_irq_t ral_sx126x_convert_irq_flags_to_radio( sx126x_irq_mask_t sx126x_irq );
+/**
+ * @brief Convert GFSK modulation parameters from RAL context to SX126x context
+ *
+ * @param [in] ral_mod_params     RAL modulation parameters
+ * @param [out] radio_mod_params  Radio modulation parameters
+ *
+ * @returns Operation status
+ */
+static ral_status_t ral_sx126x_convert_gfsk_mod_params_from_ral( const ral_gfsk_mod_params_t* ral_mod_params,
+                                                                 sx126x_mod_params_gfsk_t*    radio_mod_params );
 
-static sx126x_irq_mask_t ral_sx126x_convert_irq_flags_from_radio( ral_irq_t ral_irq );
+/**
+ * @brief Convert GFSK packet parameters from RAL context to SX126x context
+ *
+ * @param [in] ral_pkt_params     RAL packet parameters
+ * @param [out] radio_pkt_params  Radio packet parameters
+ *
+ * @returns Operation status
+ */
+static ral_status_t ral_sx126x_convert_gfsk_pkt_params_from_ral( const ral_gfsk_pkt_params_t* ral_pkt_params,
+                                                                 sx126x_pkt_params_gfsk_t*    radio_pkt_params );
 
-static ral_status_t ral_sx126x_convert_tcxo_ctrl_to_radio( ral_tcxo_ctrl_voltages_t     ral_tcxo_ctrl_voltage,
-                                                           sx126x_tcxo_ctrl_voltages_t* sx126x_tcxo_ctrl_voltage );
+/**
+ * @brief Convert LoRa modulation parameters from RAL context to SX126x context
+ *
+ * @param [in] ral_mod_params     RAL modulation parameters
+ * @param [out] radio_mod_params  Radio modulation parameters
+ *
+ * @returns Operation status
+ */
+static ral_status_t ral_sx126x_convert_lora_mod_params_from_ral( const ral_lora_mod_params_t* ral_mod_params,
+                                                                 sx126x_mod_params_lora_t*    radio_mod_params );
+
+/**
+ * @brief Convert LoRa packet parameters from RAL context to SX126x context
+ *
+ * @param [in] ral_pkt_params     RAL packet parameters
+ * @param [out] radio_pkt_params  Radio packet parameters
+ *
+ * @returns Operation status
+ */
+static ral_status_t ral_sx126x_convert_lora_pkt_params_from_ral( const ral_lora_pkt_params_t* ral_pkt_params,
+                                                                 sx126x_pkt_params_lora_t*    radio_pkt_params );
+
+/**
+ * @brief Convert LoRa CAD parameters from RAL context to SX126x context
+ *
+ * @param [in] ral_lora_cad_params     RAL LoRa CAD parameters
+ * @param [out] radio_lora_cad_params  Radio LoRa CAD parameters
+ *
+ * @returns Operation status
+ */
+static ral_status_t ral_sx126x_convert_lora_cad_params_from_ral( const ral_lora_cad_params_t* ral_lora_cad_params,
+                                                                 sx126x_cad_params_t*         radio_lora_cad_params );
 
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-ral_status_t ral_sx126x_init( const ral_t* ral )
+bool ral_sx126x_handles_part( const char* part_number )
 {
-    ral_status_t status = RAL_STATUS_ERROR;
+    return ( strcmp( "sx1261", part_number ) == 0 ) || ( strcmp( "sx1262", part_number ) == 0 );
+}
 
-    sx126x_reset( ral->context );
+ral_status_t ral_sx126x_reset( const void* context )
+{
+    return ( ral_status_t ) sx126x_reset( context );
+}
 
-    status = sx126x_set_standby( ral->context, SX126X_STANDBY_CFG_RC );
+ral_status_t ral_sx126x_init( const void* context )
+{
+    ral_status_t                status = RAL_STATUS_ERROR;
+    sx126x_tcxo_ctrl_voltages_t tcxo_supply_voltage;
+    sx126x_reg_mod_t            reg_mode;
+    bool                        dio2_is_set_as_rf_switch = false;
+    bool                        tcxo_is_radio_controlled = false;
+    uint32_t                    startup_time_in_tick     = 0;
+
+    status = ( ral_status_t ) sx126x_init_retention_list( context );
     if( status != RAL_STATUS_OK )
     {
         return status;
     }
-    status = sx126x_set_reg_mode( ral->context, SX126X_REG_MODE_DCDC );
+
+    ral_sx126x_bsp_get_reg_mode( context, &reg_mode );
+    status = ( ral_status_t ) sx126x_set_reg_mode( context, reg_mode );
     if( status != RAL_STATUS_OK )
     {
         return status;
     }
 
-    if( ral->tcxo_cfg.tcxo_ctrl_mode == RAL_TCXO_CTRL_RADIO )
+    ral_sx126x_bsp_get_rf_switch_cfg( context, &dio2_is_set_as_rf_switch );
+    status = ( ral_status_t ) sx126x_set_dio2_as_rf_sw_ctrl( context, dio2_is_set_as_rf_switch );
+    if( status != RAL_STATUS_OK )
     {
-        sx126x_tcxo_ctrl_voltages_t tcxo_ctrl_voltage;
+        return status;
+    }
 
-        status = ral_sx126x_convert_tcxo_ctrl_to_radio( ral->tcxo_cfg.tcxo_ctrl_voltage, &tcxo_ctrl_voltage );
+    ral_sx126x_bsp_get_xosc_cfg( context, &tcxo_is_radio_controlled, &tcxo_supply_voltage, &startup_time_in_tick );
+    if( tcxo_is_radio_controlled == true )
+    {
+        status = ( ral_status_t ) sx126x_set_dio3_as_tcxo_ctrl( context, tcxo_supply_voltage, startup_time_in_tick );
         if( status != RAL_STATUS_OK )
         {
             return status;
         }
 
-        status = sx126x_set_dio3_as_tcxo_ctrl( ral->context, tcxo_ctrl_voltage, ral->tcxo_cfg.tcxo_startup_time_ms );
-    }
-
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_gfsk( const ral_t* ral, const ral_params_gfsk_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    sx126x_mod_params_gfsk_t mod_params;
-    sx126x_pkt_params_gfsk_t pkt_params;
-
-    status = ral_sx126x_convert_gfsk_params_from_radio( params, &mod_params, &pkt_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_standby( ral->context, SX126X_STANDBY_CFG_RC );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_stop_tmr_on_pbl( ral->context, false );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_pkt_type( ral->context, SX126X_PKT_TYPE_GFSK );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_rf_freq( ral->context, params->freq_in_hz );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_tx_params( ral->context, params->pwr_in_dbm, SX126X_RAMP_200_US );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_buffer_base_addr( ral->context, 0x00, 0x00 );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_gfsk_mod_params( ral->context, &mod_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_gfsk_pkt_params( ral->context, &pkt_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    if( params->crc_type != RAL_GFSK_CRC_OFF )
-    {
-        status = sx126x_set_gfsk_crc_seed( ral->context, params->crc_seed );
-        if( status != RAL_STATUS_OK )
-        {
-            return status;
-        }
-        status = sx126x_set_gfsk_crc_polynomial( ral->context, params->crc_polynomial );
+        status = ( ral_status_t ) sx126x_cal( context, SX126X_CAL_ALL );
         if( status != RAL_STATUS_OK )
         {
             return status;
         }
     }
-    status = sx126x_set_gfsk_sync_word( ral->context, params->sync_word, params->sync_word_len_in_bytes );
-    if( status != RAL_STATUS_OK )
+
+    return status;
+}
+
+ral_status_t ral_sx126x_wakeup( const void* context )
+{
+    return ( ral_status_t ) sx126x_wakeup( context );
+}
+
+ral_status_t ral_sx126x_set_sleep( const void* context, const bool retain_config )
+{
+    const sx126x_sleep_cfgs_t radio_sleep_cfg =
+        ( retain_config == true ) ? SX126X_SLEEP_CFG_WARM_START : SX126X_SLEEP_CFG_COLD_START;
+
+    return ( ral_status_t ) sx126x_set_sleep( context, radio_sleep_cfg );
+}
+
+ral_status_t ral_sx126x_set_standby( const void* context, ral_standby_cfg_t standby_cfg )
+{
+    sx126x_standby_cfg_t radio_standby_cfg;
+
+    switch( standby_cfg )
     {
-        return status;
+    case RAL_STANDBY_CFG_RC:
+    {
+        radio_standby_cfg = SX126X_STANDBY_CFG_RC;
+        break;
     }
-    if( params->dc_free_is_on == true )
+    case RAL_STANDBY_CFG_XOSC:
     {
-        status = sx126x_set_gfsk_whitening_seed( ral->context, params->whitening_seed );
-        if( status != RAL_STATUS_OK )
+        radio_standby_cfg = SX126X_STANDBY_CFG_XOSC;
+        break;
+    }
+    default:
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+
+    return ( ral_status_t ) sx126x_set_standby( context, radio_standby_cfg );
+}
+
+ral_status_t ral_sx126x_set_fs( const void* context )
+{
+    return ( ral_status_t ) sx126x_set_fs( context );
+}
+
+ral_status_t ral_sx126x_set_tx( const void* context )
+{
+    return ( ral_status_t ) sx126x_set_tx( context, 0 );
+}
+
+ral_status_t ral_sx126x_set_rx( const void* context, const uint32_t timeout_in_ms )
+{
+    if( timeout_in_ms == RAL_RX_TIMEOUT_CONTINUOUS_MODE )
+    {
+        return ( ral_status_t ) sx126x_set_rx_with_timeout_in_rtc_step( context, 0x00FFFFFF );
+    }
+    else
+    {  // max timeout is 0xFFFFFE -> 262143 ms (0xFFFFFE / 64000 * 1000) - Single reception mode set if timeout_ms is 0
+        if( timeout_in_ms < 262144 )
         {
-            return status;
-        }
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_rx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    status = ral_sx126x_setup_gfsk( ral, params );
-    if( status == RAL_STATUS_OK )
-    {
-        status = ( ral_status_t ) sx126x_set_dio_irq_params(
-            ral->context, SX126X_IRQ_RX_DONE | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT,
-            SX126X_IRQ_RX_DONE | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT, SX126X_IRQ_NONE, SX126X_IRQ_NONE );
-        if( status != RAL_STATUS_OK )
-        {
-            return status;
-        }
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_tx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    status = ral_sx126x_setup_gfsk( ral, params );
-    if( status == RAL_STATUS_OK )
-    {
-        status = ( ral_status_t ) sx126x_set_dio_irq_params( ral->context, SX126X_IRQ_TX_DONE, SX126X_IRQ_TX_DONE,
-                                                             SX126X_IRQ_NONE, SX126X_IRQ_NONE );
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_lora( const ral_t* ral, const ral_params_lora_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    sx126x_mod_params_lora_t mod_params;
-    sx126x_pkt_params_lora_t pkt_params;
-
-    status = ral_sx126x_convert_lora_params_from_radio( params, &mod_params, &pkt_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_standby( ral->context, SX126X_STANDBY_CFG_RC );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_stop_tmr_on_pbl( ral->context, false );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_lora_symb_nb_timeout( ral->context, params->symb_nb_timeout );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_pkt_type( ral->context, SX126X_PKT_TYPE_LORA );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_rf_freq( ral->context, params->freq_in_hz );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_tx_params( ral->context, params->pwr_in_dbm, SX126X_RAMP_200_US );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_buffer_base_addr( ral->context, 0x00, 0x00 );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_lora_mod_params( ral->context, &mod_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_lora_pkt_params( ral->context, &pkt_params );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    status = sx126x_set_lora_sync_word( ral->context, params->sync_word );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_rx_lora( const ral_t* ral, const ral_params_lora_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    status = ral_sx126x_setup_lora( ral, params );
-    if( status == RAL_STATUS_OK )
-    {
-        status = ( ral_status_t ) sx126x_set_dio_irq_params(
-            ral->context, SX126X_IRQ_RX_DONE | SX126X_IRQ_HEADER_ERROR | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT,
-            SX126X_IRQ_RX_DONE | SX126X_IRQ_HEADER_ERROR | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT, SX126X_IRQ_NONE,
-            SX126X_IRQ_NONE );
-        if( status != RAL_STATUS_OK )
-        {
-            return status;
-        }
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_tx_lora( const ral_t* ral, const ral_params_lora_t* params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    status = ral_sx126x_setup_lora( ral, params );
-    if( status == RAL_STATUS_OK )
-    {
-        status = ( ral_status_t ) sx126x_set_dio_irq_params( ral->context, SX126X_IRQ_TX_DONE, SX126X_IRQ_TX_DONE,
-                                                             SX126X_IRQ_NONE, SX126X_IRQ_NONE );
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_setup_flrc( const ral_t* ral, const ral_params_flrc_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_setup_rx_flrc( const ral_t* ral, const ral_params_flrc_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_setup_tx_flrc( const ral_t* ral, const ral_params_flrc_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_setup_tx_lora_e( const ral_t* ral, const ral_params_lora_e_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_tx_bpsk( const ral_t* ral, const ral_params_bpsk_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_setup_cad( const ral_t* ral, const ral_lora_cad_params_t* params )
-{
-    return RAL_STATUS_UNSUPPORTED_FEATURE;
-}
-
-ral_status_t ral_sx126x_set_pkt_payload( const ral_t* ral, const uint8_t* buffer, const uint16_t size )
-{
-    return ( ral_status_t ) sx126x_write_buffer( ral->context, 0x00, buffer, size );
-}
-
-ral_status_t ral_sx126x_get_pkt_payload( const ral_t* ral, uint8_t* buffer, uint16_t max_size, uint16_t* size )
-{
-    ral_status_t              status = RAL_STATUS_ERROR;
-    sx126x_rx_buffer_status_t sx_buf_status;
-
-    status = ( ral_status_t ) sx126x_get_rx_buffer_status( ral->context, &sx_buf_status );
-    if( status == RAL_STATUS_OK )
-    {
-        if( size != 0 )
-        {
-            *size = sx_buf_status.pld_len_in_bytes;
-        }
-        if( sx_buf_status.pld_len_in_bytes <= max_size )
-        {
-            status = ( ral_status_t ) sx126x_read_buffer( ral->context, sx_buf_status.buffer_start_pointer, buffer,
-                                                          sx_buf_status.pld_len_in_bytes );
+            return ( ral_status_t ) sx126x_set_rx( context, timeout_in_ms );
         }
         else
         {
-            status = RAL_STATUS_ERROR;
+            return RAL_STATUS_ERROR;
         }
     }
+
+    return RAL_STATUS_ERROR;
+}
+
+ral_status_t ral_sx126x_set_rx_tx_fallback_mode( const void* context, const ral_fallback_modes_t ral_fallback_mode )
+{
+    sx126x_fallback_modes_t radio_fallback_mode;
+
+    switch( ral_fallback_mode )
+    {
+    case RAL_FALLBACK_STDBY_RC:
+    {
+        radio_fallback_mode = SX126X_FALLBACK_STDBY_RC;
+        break;
+    }
+    case RAL_FALLBACK_STDBY_XOSC:
+    {
+        radio_fallback_mode = SX126X_FALLBACK_STDBY_XOSC;
+        break;
+    }
+    case RAL_FALLBACK_FS:
+    {
+        radio_fallback_mode = SX126X_FALLBACK_FS;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    return ( ral_status_t ) sx126x_set_rx_tx_fallback_mode( context, radio_fallback_mode );
+}
+
+ral_status_t ral_sx126x_stop_timer_on_preamble( const void* context, const bool enable )
+{
+    return ( ral_status_t ) sx126x_stop_timer_on_preamble( context, enable );
+}
+
+ral_status_t ral_sx126x_set_rx_duty_cycle( const void* context, const uint32_t rx_time_in_ms,
+                                           const uint32_t sleep_time_in_ms )
+{
+    return ( ral_status_t ) sx126x_set_rx_duty_cycle( context, rx_time_in_ms, sleep_time_in_ms );
+}
+
+ral_status_t ral_sx126x_set_lora_cad( const void* context )
+{
+    return ( ral_status_t ) sx126x_set_cad( context );
+}
+
+ral_status_t ral_sx126x_set_tx_cw( const void* context )
+{
+    return ( ral_status_t ) sx126x_set_tx_cw( context );
+}
+
+ral_status_t ral_sx126x_set_tx_infinite_preamble( const void* context )
+{
+    return ( ral_status_t ) sx126x_set_tx_infinite_preamble( context );
+}
+
+ral_status_t ral_sx126x_set_tx_cfg( const void* context, const int8_t output_pwr_in_dbm, const uint32_t rf_freq_in_hz )
+{
+    ral_status_t                               status = RAL_STATUS_ERROR;
+    ral_sx126x_bsp_tx_cfg_output_params_t      tx_cfg_output_params;
+    const ral_sx126x_bsp_tx_cfg_input_params_t tx_cfg_input_params = {
+        .freq_in_hz               = rf_freq_in_hz,
+        .system_output_pwr_in_dbm = output_pwr_in_dbm,
+    };
+
+    ral_sx126x_bsp_get_tx_cfg( context, &tx_cfg_input_params, &tx_cfg_output_params );
+
+    status = ( ral_status_t ) sx126x_set_pa_cfg( context, &tx_cfg_output_params.pa_cfg );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    uint8_t ocp_in_step_of_2_5_ma = ( tx_cfg_output_params.pa_cfg.device_sel == 0x00 ) ? 0x38 : 0x18;
+
+    ral_sx126x_bsp_get_ocp_value( context, &ocp_in_step_of_2_5_ma );
+
+    if( ( ( tx_cfg_output_params.pa_cfg.device_sel == 0x00 ) && ( ocp_in_step_of_2_5_ma != 0x38 ) ) ||
+        ( ( tx_cfg_output_params.pa_cfg.device_sel == 0x01 ) && ( ocp_in_step_of_2_5_ma != 0x18 ) ) )
+    {
+        status = ( ral_status_t ) sx126x_set_ocp_value( context, ocp_in_step_of_2_5_ma );
+        if( status != RAL_STATUS_OK )
+        {
+            return status;
+        }
+    }
+
+    status = ( ral_status_t ) sx126x_set_tx_params( context, tx_cfg_output_params.chip_output_pwr_in_dbm_configured,
+                                                    tx_cfg_output_params.pa_ramp_time );
+
     return status;
 }
 
-ral_status_t ral_sx126x_get_gfsk_pkt_status( const ral_t* ral, ral_rx_pkt_status_gfsk_t* pkt_status )
+ral_status_t ral_sx126x_set_pkt_payload( const void* context, const uint8_t* buffer, const uint16_t size )
 {
     ral_status_t status = RAL_STATUS_ERROR;
 
-    sx126x_pkt_status_gfsk_t sx_pkt_status;
+    status = ( ral_status_t ) sx126x_set_buffer_base_address( context, 0x00, 0x00 );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
 
-    status = ( ral_status_t ) sx126x_get_gfsk_pkt_status( ral->context, &sx_pkt_status );
-
-    pkt_status->rx_status        = sx_pkt_status.rx_status;
-    pkt_status->rssi_sync_in_dbm = sx_pkt_status.rssi_sync;
-    pkt_status->rssi_avg_in_dbm  = sx_pkt_status.rssi_avg;
+    status = ( ral_status_t ) sx126x_write_buffer( context, 0x00, buffer, size );
 
     return status;
 }
 
-ral_status_t ral_sx126x_get_lora_pkt_status( const ral_t* ral, ral_rx_pkt_status_lora_t* pkt_status )
+ral_status_t ral_sx126x_get_pkt_payload( const void* context, uint16_t max_size_in_bytes, uint8_t* buffer,
+                                         uint16_t* size_in_bytes )
 {
-    ral_status_t status = RAL_STATUS_ERROR;
+    ral_status_t              status = RAL_STATUS_ERROR;
+    sx126x_rx_buffer_status_t radio_rx_buffer_status;
 
-    sx126x_pkt_status_lora_t sx_pkt_status;
+    status = ( ral_status_t ) sx126x_get_rx_buffer_status( context, &radio_rx_buffer_status );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
 
-    status = ( ral_status_t ) sx126x_get_lora_pkt_status( ral->context, &sx_pkt_status );
+    if( size_in_bytes != 0 )
+    {
+        *size_in_bytes = radio_rx_buffer_status.pld_len_in_bytes;
+    }
 
-    pkt_status->rssi_pkt_in_dbm       = sx_pkt_status.rssi_pkt_in_dbm;
-    pkt_status->snr_pkt_in_db         = sx_pkt_status.snr_pkt_in_db;
-    pkt_status->signal_rssi_pkt_in_db = sx_pkt_status.signal_rssi_pkt_in_dbm;
+    if( radio_rx_buffer_status.pld_len_in_bytes <= max_size_in_bytes )
+    {
+        status = ( ral_status_t ) sx126x_read_buffer( context, radio_rx_buffer_status.buffer_start_pointer, buffer,
+                                                      radio_rx_buffer_status.pld_len_in_bytes );
+    }
+    else
+    {
+        status = RAL_STATUS_ERROR;
+    }
 
     return status;
 }
 
-ral_status_t ral_sx126x_get_flrc_pkt_status( const ral_t* ral, ral_rx_pkt_status_flrc_t* pkt_status )
+ral_status_t ral_sx126x_get_irq_status( const void* context, ral_irq_t* irq )
+{
+    ral_status_t      status          = RAL_STATUS_ERROR;
+    sx126x_irq_mask_t sx126x_irq_mask = SX126X_IRQ_NONE;
+
+    status = ( ral_status_t ) sx126x_get_irq_status( context, &sx126x_irq_mask );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    *irq = ral_sx126x_convert_irq_flags_to_ral( sx126x_irq_mask );
+
+    return status;
+}
+
+ral_status_t ral_sx126x_clear_irq_status( const void* context, const ral_irq_t irq )
+{
+    const sx126x_irq_mask_t sx126x_irq_mask = ral_sx126x_convert_irq_flags_from_ral( irq );
+
+    return ( ral_status_t ) sx126x_clear_irq_status( context, sx126x_irq_mask );
+}
+
+ral_status_t ral_sx126x_get_and_clear_irq_status( const void* context, ral_irq_t* irq )
+{
+    ral_status_t      status          = RAL_STATUS_ERROR;
+    sx126x_irq_mask_t sx126x_irq_mask = SX126X_IRQ_NONE;
+
+    status = ( ral_status_t ) sx126x_get_and_clear_irq_status( context, &sx126x_irq_mask );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    if( irq != 0 )
+    {
+        *irq = ral_sx126x_convert_irq_flags_to_ral( sx126x_irq_mask );
+    }
+
+    return status;
+}
+
+ral_status_t ral_sx126x_set_dio_irq_params( const void* context, const ral_irq_t irq )
+{
+    const uint16_t sx126x_irq = ral_sx126x_convert_irq_flags_from_ral( irq );
+
+    return ( ral_status_t ) sx126x_set_dio_irq_params( context, SX126X_IRQ_ALL, sx126x_irq, SX126X_IRQ_NONE,
+                                                       SX126X_IRQ_NONE );
+}
+
+ral_status_t ral_sx126x_set_rf_freq( const void* context, const uint32_t freq_in_hz )
+{
+    return ( ral_status_t ) sx126x_set_rf_freq( context, freq_in_hz );
+}
+
+ral_status_t ral_sx126x_set_pkt_type( const void* context, const ral_pkt_type_t pkt_type )
+{
+    sx126x_pkt_type_t radio_pkt_type;
+
+    switch( pkt_type )
+    {
+    case RAL_PKT_TYPE_GFSK:
+    {
+        radio_pkt_type = SX126X_PKT_TYPE_GFSK;
+        break;
+    }
+    case RAL_PKT_TYPE_LORA:
+    {
+        radio_pkt_type = SX126X_PKT_TYPE_LORA;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    return ( ral_status_t ) sx126x_set_pkt_type( context, radio_pkt_type );
+}
+
+ral_status_t ral_sx126x_set_gfsk_mod_params( const void* context, const ral_gfsk_mod_params_t* params )
+{
+    ral_status_t             status           = RAL_STATUS_ERROR;
+    sx126x_mod_params_gfsk_t radio_mod_params = { 0 };
+
+    status = ral_sx126x_convert_gfsk_mod_params_from_ral( params, &radio_mod_params );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return ( ral_status_t ) sx126x_set_gfsk_mod_params( context, &radio_mod_params );
+}
+
+ral_status_t ral_sx126x_set_gfsk_pkt_params( const void* context, const ral_gfsk_pkt_params_t* params )
+{
+    ral_status_t             status           = RAL_STATUS_ERROR;
+    sx126x_pkt_params_gfsk_t radio_pkt_params = { 0 };
+
+    status = ral_sx126x_convert_gfsk_pkt_params_from_ral( params, &radio_pkt_params );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return ( ral_status_t ) sx126x_set_gfsk_pkt_params( context, &radio_pkt_params );
+}
+
+ral_status_t ral_sx126x_set_lora_mod_params( const void* context, const ral_lora_mod_params_t* params )
+{
+    ral_status_t             status = RAL_STATUS_ERROR;
+    sx126x_mod_params_lora_t radio_mod_params;
+
+    status = ral_sx126x_convert_lora_mod_params_from_ral( params, &radio_mod_params );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return ( ral_status_t ) sx126x_set_lora_mod_params( context, &radio_mod_params );
+}
+
+ral_status_t ral_sx126x_set_lora_pkt_params( const void* context, const ral_lora_pkt_params_t* params )
+{
+    ral_status_t             status           = RAL_STATUS_ERROR;
+    sx126x_pkt_params_lora_t radio_pkt_params = { 0 };
+
+    status = ral_sx126x_convert_lora_pkt_params_from_ral( params, &radio_pkt_params );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return ( ral_status_t ) sx126x_set_lora_pkt_params( context, &radio_pkt_params );
+}
+
+ral_status_t ral_sx126x_set_lora_cad_params( const void* context, const ral_lora_cad_params_t* params )
+{
+    ral_status_t        status = RAL_STATUS_ERROR;
+    sx126x_cad_params_t radio_lora_cad_params;
+
+    status = ral_sx126x_convert_lora_cad_params_from_ral( params, &radio_lora_cad_params );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return ( ral_status_t ) sx126x_set_cad_params( context, &radio_lora_cad_params );
+}
+
+ral_status_t ral_sx126x_set_lora_symb_nb_timeout( const void* context, const uint8_t nb_of_symbs )
+{
+    return ( ral_status_t ) sx126x_set_lora_symb_nb_timeout( context, nb_of_symbs );
+}
+
+ral_status_t ral_sx126x_set_flrc_mod_params( const void* context, const ral_flrc_mod_params_t* params )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+ral_status_t ral_sx126x_set_flrc_pkt_params( const void* context, const ral_flrc_pkt_params_t* params )
 {
     return RAL_STATUS_UNSUPPORTED_FEATURE;
 }
 
-ral_status_t ral_sx126x_set_sleep( const ral_t* ral )
-{
-    return ( ral_status_t ) sx126x_set_sleep( ral->context, SX126X_SLEEP_CFG_WARM_START );
-}
-
-ral_status_t ral_sx126x_set_standby( const ral_t* ral )
-{
-    return ( ral_status_t ) sx126x_set_standby( ral->context, SX126X_STANDBY_CFG_RC );
-}
-
-ral_status_t ral_sx126x_set_tx( const ral_t* ral )
-{
-    // Set no timeout.
-    return ( ral_status_t ) sx126x_set_tx( ral->context, 0 );
-}
-
-ral_status_t ral_sx126x_set_tx_cw( const ral_t* ral )
-{
-    return ( ral_status_t ) sx126x_set_tx_cw( ral->context );
-}
-
-ral_status_t ral_sx126x_set_rx( const ral_t* ral, const uint32_t timeout_ms )
-{
-    if( timeout_ms == 0xFFFFFFFF )
-    {
-        return ( ral_status_t ) sx126x_set_rx( ral->context, timeout_ms );
-    }
-    else
-    {
-        return ( ral_status_t ) sx126x_set_rx( ral->context, timeout_ms << 6 );
-    }
-}
-
-ral_status_t ral_sx126x_set_cad( const ral_t* ral )
-{
-    return ( ral_status_t ) sx126x_set_cad( ral->context );
-}
-
-ral_status_t ral_sx126x_get_irq_status( const ral_t* ral, ral_irq_t* ral_irq )
-{
-    ral_status_t      status          = RAL_STATUS_ERROR;
-    sx126x_irq_mask_t sx126x_irq_mask = SX126X_IRQ_NONE;
-
-    status = ( ral_status_t ) sx126x_get_irq_status( ral->context, &sx126x_irq_mask );
-    if( status == RAL_STATUS_OK )
-    {
-        *ral_irq = ral_sx126x_convert_irq_flags_to_radio( sx126x_irq_mask );
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_clear_irq_status( const ral_t* ral, const ral_irq_t ral_irq )
-{
-    sx126x_irq_mask_t sx126x_irq_mask = ral_sx126x_convert_irq_flags_from_radio( ral_irq );
-
-    if( sx126x_irq_mask != 0 )
-    {
-        return ( ral_status_t ) sx126x_clear_irq_status( ral->context, sx126x_irq_mask );
-    }
-    else
-    {
-        return RAL_STATUS_OK;
-    }
-}
-
-ral_status_t ral_sx126x_get_and_clear_irq_status( const ral_t* ral, ral_irq_t* ral_irq )
-{
-    ral_irq_t         ral_irq_mask;
-    ral_status_t      status          = RAL_STATUS_ERROR;
-    sx126x_irq_mask_t sx126x_irq_mask = SX126X_IRQ_NONE;
-
-    status = ( ral_status_t ) sx126x_get_and_clear_irq_status( ral->context, &sx126x_irq_mask );
-
-    if( status == RAL_STATUS_OK )
-    {
-        ral_irq_mask = ral_sx126x_convert_irq_flags_to_radio( sx126x_irq_mask );
-        if( ral_irq != NULL )
-        {
-            *ral_irq = ral_irq_mask;
-        }
-    }
-    return status;
-}
-
-ral_status_t ral_sx126x_set_dio_irq_params( const ral_t* ral, const ral_irq_t ral_irq )
-{
-    uint16_t sx126x_irq = ral_sx126x_convert_irq_flags_from_radio( ral_irq );
-
-    return ( ral_status_t ) sx126x_set_dio_irq_params( ral->context, sx126x_irq, sx126x_irq, SX126X_IRQ_NONE,
-                                                       SX126X_IRQ_NONE );
-}
-
-ral_status_t ral_sx126x_get_rssi( const ral_t* ral, int16_t* rssi )
-{
-    return ( ral_status_t ) sx126x_get_rssi_inst( ral->context, rssi );
-}
-
-ral_status_t ral_sx126x_get_lora_time_on_air_in_ms( const ral_params_lora_t* params, uint32_t* toa )
+ral_status_t ral_sx126x_get_gfsk_rx_pkt_status( const void* context, ral_gfsk_rx_pkt_status_t* rx_pkt_status )
 {
     ral_status_t             status = RAL_STATUS_ERROR;
-    sx126x_mod_params_lora_t mod_params;
-    sx126x_pkt_params_lora_t pkt_params;
+    sx126x_pkt_status_gfsk_t radio_rx_pkt_status;
 
-    status = ral_sx126x_convert_lora_params_from_radio( params, &mod_params, &pkt_params );
+    status = ( ral_status_t ) sx126x_get_gfsk_pkt_status( context, &radio_rx_pkt_status );
     if( status != RAL_STATUS_OK )
     {
         return status;
     }
 
-    *toa = sx126x_get_lora_time_on_air_in_ms( &pkt_params, &mod_params );
+    uint8_t rx_status = 0;
+    rx_status |= ( radio_rx_pkt_status.rx_status.pkt_sent == true ) ? RAL_RX_STATUS_PKT_SENT : 0x00;
+    rx_status |= ( radio_rx_pkt_status.rx_status.pkt_received == true ) ? RAL_RX_STATUS_PKT_RECEIVED : 0x00;
+    rx_status |= ( radio_rx_pkt_status.rx_status.abort_error == true ) ? RAL_RX_STATUS_ABORT_ERROR : 0x00;
+    rx_status |= ( radio_rx_pkt_status.rx_status.length_error == true ) ? RAL_RX_STATUS_LENGTH_ERROR : 0x00;
+    rx_status |= ( radio_rx_pkt_status.rx_status.crc_error == true ) ? RAL_RX_STATUS_CRC_ERROR : 0x00;
+    rx_status |= ( radio_rx_pkt_status.rx_status.adrs_error == true ) ? RAL_RX_STATUS_ADDR_ERROR : 0x00;
 
-    return RAL_STATUS_OK;
+    rx_pkt_status->rx_status = rx_status;
+
+    rx_pkt_status->rssi_sync_in_dbm = radio_rx_pkt_status.rssi_sync;
+    rx_pkt_status->rssi_avg_in_dbm  = radio_rx_pkt_status.rssi_avg;
+
+    return status;
 }
 
-ral_status_t ral_sx126x_get_gfsk_time_on_air_in_ms( const ral_params_gfsk_t* params, uint32_t* toa )
+ral_status_t ral_sx126x_get_lora_rx_pkt_status( const void* context, ral_lora_rx_pkt_status_t* rx_pkt_status )
 {
     ral_status_t             status = RAL_STATUS_ERROR;
-    sx126x_mod_params_gfsk_t mod_params;
-    sx126x_pkt_params_gfsk_t pkt_params;
+    sx126x_pkt_status_lora_t radio_rx_pkt_status;
 
-    status = ral_sx126x_convert_gfsk_params_from_radio( params, &mod_params, &pkt_params );
+    status = ( ral_status_t ) sx126x_get_lora_pkt_status( context, &radio_rx_pkt_status );
     if( status != RAL_STATUS_OK )
     {
         return status;
     }
 
-    *toa = sx126x_get_gfsk_time_on_air_in_ms( &pkt_params, &mod_params );
+    rx_pkt_status->rssi_pkt_in_dbm        = radio_rx_pkt_status.rssi_pkt_in_dbm;
+    rx_pkt_status->snr_pkt_in_db          = radio_rx_pkt_status.snr_pkt_in_db;
+    rx_pkt_status->signal_rssi_pkt_in_dbm = radio_rx_pkt_status.signal_rssi_pkt_in_dbm;
+
+    return status;
+}
+
+ral_status_t ral_sx126x_get_flrc_rx_pkt_status( const void* context, ral_flrc_rx_pkt_status_t* rx_pkt_status )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+
+ral_status_t ral_sx126x_get_rssi_inst( const void* context, int16_t* rssi_in_dbm )
+{
+    return ( ral_status_t ) sx126x_get_rssi_inst( context, rssi_in_dbm );
+}
+
+uint32_t ral_sx126x_get_lora_time_on_air_in_ms( const ral_lora_pkt_params_t* pkt_p, const ral_lora_mod_params_t* mod_p )
+{
+    sx126x_mod_params_lora_t radio_mod_params;
+    sx126x_pkt_params_lora_t radio_pkt_params;
+
+    ral_sx126x_convert_lora_mod_params_from_ral( mod_p, &radio_mod_params );
+    ral_sx126x_convert_lora_pkt_params_from_ral( pkt_p, &radio_pkt_params );
+
+    return sx126x_get_lora_time_on_air_in_ms( &radio_pkt_params, &radio_mod_params );
+}
+
+uint32_t ral_sx126x_get_gfsk_time_on_air_in_ms( const ral_gfsk_pkt_params_t* pkt_p, const ral_gfsk_mod_params_t* mod_p )
+{
+    sx126x_mod_params_gfsk_t radio_mod_params;
+    sx126x_pkt_params_gfsk_t radio_pkt_params;
+
+    ral_sx126x_convert_gfsk_mod_params_from_ral( mod_p, &radio_mod_params );
+    ral_sx126x_convert_gfsk_pkt_params_from_ral( pkt_p, &radio_pkt_params );
+
+    return sx126x_get_gfsk_time_on_air_in_ms( &radio_pkt_params, &radio_mod_params );
+}
+
+uint32_t ral_sx126x_get_flrc_time_on_air_in_ms( const ral_flrc_pkt_params_t* pkt_p, const ral_flrc_mod_params_t* mod_p )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+
+ral_status_t ral_sx126x_set_gfsk_sync_word( const void* context, const uint8_t* sync_word, const uint8_t sync_word_len )
+{
+    return ( ral_status_t ) sx126x_set_gfsk_sync_word( context, sync_word, sync_word_len );
+}
+
+ral_status_t ral_sx126x_set_lora_sync_word( const void* context, const uint8_t sync_word )
+{
+    return ( ral_status_t ) sx126x_set_lora_sync_word( context, sync_word );
+}
+
+ral_status_t ral_sx126x_set_flrc_sync_word( const void* context, const uint8_t* sync_word, const uint8_t sync_word_len )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+
+ral_status_t ral_sx126x_set_gfsk_crc_params( const void* context, const uint16_t seed, const uint16_t polynomial )
+{
+    ral_status_t status = RAL_STATUS_ERROR;
+
+    status = ( ral_status_t ) sx126x_set_gfsk_crc_seed( context, seed );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    status = ( ral_status_t ) sx126x_set_gfsk_crc_polynomial( context, polynomial );
+    if( status != RAL_STATUS_OK )
+    {
+        return status;
+    }
+
+    return status;
+}
+
+ral_status_t ral_sx126x_set_flrc_crc_params( const void* context, const uint32_t seed )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+
+ral_status_t ral_sx126x_set_gfsk_whitening_seed( const void* context, const uint16_t seed )
+{
+    return ( ral_status_t ) sx126x_set_gfsk_whitening_seed( context, seed );
+}
+
+ral_status_t ral_sx126x_get_tx_consumption_in_ua( const void* context, const int8_t output_pwr_in_dbm,
+                                                  const uint32_t rf_freq_in_hz, uint32_t* pwr_consumption_in_ua )
+{
+    return RAL_STATUS_UNSUPPORTED_FEATURE;
+}
+
+ral_status_t ral_sx126x_get_gfsk_rx_consumption_in_ua( const void* context, const uint32_t br_in_bps,
+                                                       const uint32_t bw_dsb_in_hz, const bool rx_boosted,
+                                                       uint32_t* pwr_consumption_in_ua )
+{
+    sx126x_reg_mod_t radio_reg_mode;
+
+    ral_sx126x_bsp_get_reg_mode( context, &radio_reg_mode );
+
+    // TODO: find the br/bw dependent values
+
+    if( radio_reg_mode == SX126X_REG_MODE_DCDC )
+    {
+        *pwr_consumption_in_ua =
+            ( rx_boosted ) ? SX126X_GFSK_RX_BOOSTED_CONSUMPTION_DCDC : SX126X_GFSK_RX_CONSUMPTION_DCDC;
+    }
+    else
+    {
+        *pwr_consumption_in_ua =
+            ( rx_boosted ) ? SX126X_GFSK_RX_BOOSTED_CONSUMPTION_LDO : SX126X_GFSK_RX_CONSUMPTION_LDO;
+    }
 
     return RAL_STATUS_OK;
 }
 
-ral_status_t ral_sx126x_read_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size )
+ral_status_t ral_sx126x_get_lora_rx_consumption_in_ua( const void* context, const ral_lora_bw_t bw,
+                                                       const bool rx_boosted, uint32_t* pwr_consumption_in_ua )
 {
-    return ( ral_status_t ) sx126x_read_register( ral->context, address, buffer, size );
-}
+    sx126x_reg_mod_t radio_reg_mode;
 
-ral_status_t ral_sx126x_write_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size )
-{
-    return ( ral_status_t ) sx126x_write_register( ral->context, address, buffer, size );
+    ral_sx126x_bsp_get_reg_mode( context, &radio_reg_mode );
+
+    // TODO: find the bw dependent values
+
+    if( radio_reg_mode == SX126X_REG_MODE_DCDC )
+    {
+        *pwr_consumption_in_ua =
+            ( rx_boosted ) ? SX126X_LORA_RX_BOOSTED_CONSUMPTION_DCDC : SX126X_LORA_RX_CONSUMPTION_DCDC;
+    }
+    else
+    {
+        *pwr_consumption_in_ua =
+            ( rx_boosted ) ? SX126X_LORA_RX_BOOSTED_CONSUMPTION_LDO : SX126X_LORA_RX_CONSUMPTION_LDO;
+    }
+
+    return RAL_STATUS_OK;
 }
 
 /*
@@ -588,118 +768,7 @@ ral_status_t ral_sx126x_write_register( const ral_t* ral, uint16_t address, uint
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
-static ral_status_t ral_sx126x_convert_gfsk_params_from_radio( const ral_params_gfsk_t*  params,
-                                                               sx126x_mod_params_gfsk_t* mod_params,
-                                                               sx126x_pkt_params_gfsk_t* pkt_params )
-{
-    ral_status_t status = RAL_STATUS_ERROR;
-
-    uint32_t                 bw_dsb_in_hz = params->bw_ssb_in_hz << 1;
-    uint8_t                  bw_dsb_param = 0;
-    sx126x_gfsk_crc_types_t  crc_type     = SX126X_GFSK_CRC_OFF;
-    sx126x_gfsk_mod_shapes_t mod_shape    = SX126X_GFSK_MOD_SHAPE_OFF;
-
-    status = ( ral_status_t ) sx126x_get_gfsk_bw_param( bw_dsb_in_hz, &bw_dsb_param );
-    if( status != RAL_STATUS_OK )
-    {
-        return status;
-    }
-
-    switch( params->crc_type )
-    {
-    case RAL_GFSK_CRC_OFF:
-        crc_type = SX126X_GFSK_CRC_OFF;
-        break;
-    case RAL_GFSK_CRC_1_BYTE:
-        crc_type = SX126X_GFSK_CRC_1_BYTE;
-        break;
-    case RAL_GFSK_CRC_2_BYTES:
-        crc_type = SX126X_GFSK_CRC_2_BYTES;
-        break;
-    case RAL_GFSK_CRC_1_BYTE_INV:
-        crc_type = SX126X_GFSK_CRC_1_BYTE_INV;
-        break;
-    case RAL_GFSK_CRC_2_BYTES_INV:
-        crc_type = SX126X_GFSK_CRC_2_BYTES_INV;
-        break;
-    default:
-        return RAL_STATUS_UNKNOWN_VALUE;
-    }
-
-    switch( params->pulse_shape )
-    {
-    case RAL_GFSK_MOD_SHAPE_OFF:
-        mod_shape = SX126X_GFSK_MOD_SHAPE_OFF;
-        break;
-    case RAL_GFSK_MOD_SHAPE_BT_03:
-        mod_shape = SX126X_GFSK_MOD_SHAPE_BT_03;
-        break;
-    case RAL_GFSK_MOD_SHAPE_BT_05:
-        mod_shape = SX126X_GFSK_MOD_SHAPE_BT_05;
-        break;
-    case RAL_GFSK_MOD_SHAPE_BT_07:
-        mod_shape = SX126X_GFSK_MOD_SHAPE_BT_07;
-        break;
-    case RAL_GFSK_MOD_SHAPE_BT_1:
-        mod_shape = SX126X_GFSK_MOD_SHAPE_BT_1;
-        break;
-    default:
-        return RAL_STATUS_UNKNOWN_VALUE;
-    }
-
-    *mod_params = ( sx126x_mod_params_gfsk_t ){
-        .br_in_bps    = params->br_in_bps,
-        .bw_dsb_param = bw_dsb_param,
-        .fdev_in_hz   = params->fdev_in_hz,
-        .mod_shape    = mod_shape,
-    };
-
-    *pkt_params = ( sx126x_pkt_params_gfsk_t ){
-        .pbl_len_in_bits       = params->pbl_len_in_bytes << 3,
-        .pbl_min_det           = SX126X_GFSK_PBL_DET_08_BITS,
-        .sync_word_len_in_bits = params->sync_word_len_in_bytes << 3,
-        .addr_cmp              = SX126X_GFSK_ADDR_CMP_FILT_OFF,
-        .hdr_type              = params->pld_is_fix ? SX126X_GFSK_PKT_FIX_LEN : SX126X_GFSK_PKT_VAR_LEN,
-        .pld_len_in_bytes      = params->pld_len_in_bytes,
-        .crc_type              = crc_type,
-        .dc_free               = params->dc_free_is_on ? SX126X_GFSK_DC_FREE_WHITENING : SX126X_GFSK_DC_FREE_OFF
-    };
-
-    return RAL_STATUS_OK;
-}
-
-static ral_status_t ral_sx126x_convert_lora_params_from_radio( const ral_params_lora_t*  params,
-                                                               sx126x_mod_params_lora_t* mod_params,
-                                                               sx126x_pkt_params_lora_t* pkt_params )
-{
-    uint16_t pbl_len_in_symb = params->pbl_len_in_symb;
-
-    // Ensure that the preamble length is at least 12 symbols when using SF5 or
-    // SF6
-    if( ( params->sf == RAL_LORA_SF5 ) || ( params->sf == RAL_LORA_SF6 ) )
-    {
-        if( pbl_len_in_symb < 12 )
-        {
-            pbl_len_in_symb = 12;
-        }
-    }
-
-    *mod_params = ( sx126x_mod_params_lora_t ){ .sf   = params->sf,
-                                                .bw   = ral_to_sx126x_lora_bw[params->bw],
-                                                .cr   = ral_to_sx126x_lora_cr[params->cr],
-                                                .ldro = ral_compute_lora_ldro( params->sf, params->bw ) };
-
-    *pkt_params = ( sx126x_pkt_params_lora_t ){ .pbl_len_in_symb = params->pbl_len_in_symb,
-                                                .hdr_type        = params->pld_is_fix ? SX126X_LORA_PKT_IMPLICIT
-                                                                               : SX126X_LORA_PKT_EXPLICIT,
-                                                .pld_len_in_bytes = params->pld_len_in_bytes,
-                                                .crc_is_on        = params->crc_is_on,
-                                                .invert_iq_is_on  = params->invert_iq_is_on };
-
-    return RAL_STATUS_OK;
-}
-
-static ral_irq_t ral_sx126x_convert_irq_flags_to_radio( sx126x_irq_mask_t sx126x_irq )
+static ral_irq_t ral_sx126x_convert_irq_flags_to_ral( sx126x_irq_mask_t sx126x_irq )
 {
     ral_irq_t ral_irq = RAL_IRQ_NONE;
 
@@ -732,14 +801,18 @@ static ral_irq_t ral_sx126x_convert_irq_flags_to_radio( sx126x_irq_mask_t sx126x
     {
         ral_irq |= RAL_IRQ_CAD_DONE;
     }
-    if( ( sx126x_irq & SX126X_IRQ_CAD_DET ) == SX126X_IRQ_CAD_DET )
+    if( ( sx126x_irq & SX126X_IRQ_CAD_DETECTED ) == SX126X_IRQ_CAD_DETECTED )
     {
         ral_irq |= RAL_IRQ_CAD_OK;
+    }
+    if( ( sx126x_irq & SX126X_IRQ_PREAMBLE_DETECTED ) == SX126X_IRQ_PREAMBLE_DETECTED )
+    {
+        ral_irq |= RAL_IRQ_RX_PREAMBLE_DETECTED;
     }
     return ral_irq;
 }
 
-static sx126x_irq_mask_t ral_sx126x_convert_irq_flags_from_radio( ral_irq_t ral_irq )
+static sx126x_irq_mask_t ral_sx126x_convert_irq_flags_from_ral( ral_irq_t ral_irq )
 {
     sx126x_irq_mask_t sx126x_irq_mask = SX126X_IRQ_NONE;
 
@@ -774,53 +847,370 @@ static sx126x_irq_mask_t ral_sx126x_convert_irq_flags_from_radio( ral_irq_t ral_
     }
     if( ( ral_irq & RAL_IRQ_CAD_OK ) == RAL_IRQ_CAD_OK )
     {
-        sx126x_irq_mask |= SX126X_IRQ_CAD_DET;
+        sx126x_irq_mask |= SX126X_IRQ_CAD_DETECTED;
     }
-    if( ( ral_irq & RAL_IRQ_ALL ) == RAL_IRQ_ALL )
+    if( ( ral_irq & RAL_IRQ_RX_PREAMBLE_DETECTED ) == RAL_IRQ_RX_PREAMBLE_DETECTED )
     {
-        sx126x_irq_mask |= SX126X_IRQ_ALL;
+        sx126x_irq_mask |= SX126X_IRQ_PREAMBLE_DETECTED;
     }
 
     return sx126x_irq_mask;
 }
 
-static ral_status_t ral_sx126x_convert_tcxo_ctrl_to_radio( ral_tcxo_ctrl_voltages_t     ral_tcxo_ctrl_voltage,
-                                                           sx126x_tcxo_ctrl_voltages_t* sx126x_tcxo_ctrl_voltage )
+static ral_status_t ral_sx126x_convert_gfsk_mod_params_from_ral( const ral_gfsk_mod_params_t* ral_mod_params,
+                                                                 sx126x_mod_params_gfsk_t*    radio_mod_params )
 {
-    ral_status_t status = RAL_STATUS_OK;
+    ral_status_t status       = RAL_STATUS_ERROR;
+    uint8_t      bw_dsb_param = 0;
 
-    switch( ral_tcxo_ctrl_voltage )
+    status = ( ral_status_t ) sx126x_get_gfsk_bw_param( ral_mod_params->bw_dsb_in_hz, &bw_dsb_param );
+    if( status != RAL_STATUS_OK )
     {
-    case RAL_TCXO_CTRL_1_6V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_1_6V;
+        return status;
+    }
+
+    radio_mod_params->br_in_bps    = ral_mod_params->br_in_bps;
+    radio_mod_params->fdev_in_hz   = ral_mod_params->fdev_in_hz;
+    radio_mod_params->bw_dsb_param = bw_dsb_param;
+
+    switch( ral_mod_params->pulse_shape )
+    {
+    case RAL_GFSK_PULSE_SHAPE_OFF:
+    {
+        radio_mod_params->pulse_shape = SX126X_GFSK_PULSE_SHAPE_OFF;
         break;
-    case RAL_TCXO_CTRL_1_7V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_1_7V;
+    }
+    case RAL_GFSK_PULSE_SHAPE_BT_03:
+    {
+        radio_mod_params->pulse_shape = SX126X_GFSK_PULSE_SHAPE_BT_03;
         break;
-    case RAL_TCXO_CTRL_1_8V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_1_8V;
+    }
+    case RAL_GFSK_PULSE_SHAPE_BT_05:
+    {
+        radio_mod_params->pulse_shape = SX126X_GFSK_PULSE_SHAPE_BT_05;
         break;
-    case RAL_TCXO_CTRL_2_2V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_2_2V;
+    }
+    case RAL_GFSK_PULSE_SHAPE_BT_07:
+    {
+        radio_mod_params->pulse_shape = SX126X_GFSK_PULSE_SHAPE_BT_07;
         break;
-    case RAL_TCXO_CTRL_2_4V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_2_4V;
+    }
+    case RAL_GFSK_PULSE_SHAPE_BT_1:
+    {
+        radio_mod_params->pulse_shape = SX126X_GFSK_PULSE_SHAPE_BT_1;
         break;
-    case RAL_TCXO_CTRL_2_7V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_2_7V;
-        break;
-    case RAL_TCXO_CTRL_3_0V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_3_0V;
-        break;
-    case RAL_TCXO_CTRL_3_3V:
-        *sx126x_tcxo_ctrl_voltage = SX126X_TCXO_CTRL_3_3V;
-        break;
+    }
     default:
-        status = RAL_STATUS_UNKNOWN_VALUE;
-        break;
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
     }
 
     return status;
+}
+
+static ral_status_t ral_sx126x_convert_gfsk_pkt_params_from_ral( const ral_gfsk_pkt_params_t* ral_pkt_params,
+                                                                 sx126x_pkt_params_gfsk_t*    radio_pkt_params )
+{
+    radio_pkt_params->preamble_len_in_bits = ral_pkt_params->preamble_len_in_bits;
+
+    switch( ral_pkt_params->preamble_detector )
+    {
+    case RAL_GFSK_PREAMBLE_DETECTOR_OFF:
+    {
+        radio_pkt_params->preamble_detector = SX126X_GFSK_PREAMBLE_DETECTOR_OFF;
+        break;
+    }
+    case RAL_GFSK_PREAMBLE_DETECTOR_MIN_8BITS:
+    {
+        radio_pkt_params->preamble_detector = SX126X_GFSK_PREAMBLE_DETECTOR_MIN_8BITS;
+        break;
+    }
+    case RAL_GFSK_PREAMBLE_DETECTOR_MIN_16BITS:
+    {
+        radio_pkt_params->preamble_detector = SX126X_GFSK_PREAMBLE_DETECTOR_MIN_16BITS;
+        break;
+    }
+    case RAL_GFSK_PREAMBLE_DETECTOR_MIN_24BITS:
+    {
+        radio_pkt_params->preamble_detector = SX126X_GFSK_PREAMBLE_DETECTOR_MIN_24BITS;
+        break;
+    }
+    case RAL_GFSK_PREAMBLE_DETECTOR_MIN_32BITS:
+    {
+        radio_pkt_params->preamble_detector = SX126X_GFSK_PREAMBLE_DETECTOR_MIN_32BITS;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_pkt_params->sync_word_len_in_bits = ral_pkt_params->sync_word_len_in_bits;
+
+    switch( ral_pkt_params->address_filtering )
+    {
+    case RAL_GFSK_ADDRESS_FILTERING_DISABLE:
+    {
+        radio_pkt_params->address_filtering = SX126X_GFSK_ADDRESS_FILTERING_DISABLE;
+        break;
+    }
+    case RAL_GFSK_ADDRESS_FILTERING_NODE_ADDRESS:
+    {
+        radio_pkt_params->address_filtering = SX126X_GFSK_ADDRESS_FILTERING_NODE_ADDRESS;
+        break;
+    }
+    case RAL_GFSK_ADDRESS_FILTERING_NODE_AND_BROADCAST_ADDRESSES:
+    {
+        radio_pkt_params->address_filtering = SX126X_GFSK_ADDRESS_FILTERING_NODE_AND_BROADCAST_ADDRESSES;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    switch( ral_pkt_params->header_type )
+    {
+    case RAL_GFSK_PKT_FIX_LEN:
+    {
+        radio_pkt_params->header_type = SX126X_GFSK_PKT_FIX_LEN;
+        break;
+    }
+    case RAL_GFSK_PKT_VAR_LEN:
+    {
+        radio_pkt_params->header_type = SX126X_GFSK_PKT_VAR_LEN;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_pkt_params->pld_len_in_bytes = ral_pkt_params->pld_len_in_bytes;
+
+    switch( ral_pkt_params->crc_type )
+    {
+    case RAL_GFSK_CRC_OFF:
+    {
+        radio_pkt_params->crc_type = SX126X_GFSK_CRC_OFF;
+        break;
+    }
+    case RAL_GFSK_CRC_1_BYTE:
+    {
+        radio_pkt_params->crc_type = SX126X_GFSK_CRC_1_BYTE;
+        break;
+    }
+    case RAL_GFSK_CRC_2_BYTES:
+    {
+        radio_pkt_params->crc_type = SX126X_GFSK_CRC_2_BYTES;
+        break;
+    }
+    case RAL_GFSK_CRC_1_BYTE_INV:
+    {
+        radio_pkt_params->crc_type = SX126X_GFSK_CRC_1_BYTE_INV;
+        break;
+    }
+    case RAL_GFSK_CRC_2_BYTES_INV:
+    {
+        radio_pkt_params->crc_type = SX126X_GFSK_CRC_2_BYTES_INV;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    switch( ral_pkt_params->dc_free )
+    {
+    case RAL_GFSK_DC_FREE_OFF:
+    {
+        radio_pkt_params->dc_free = SX126X_GFSK_DC_FREE_OFF;
+        break;
+    }
+    case RAL_GFSK_DC_FREE_WHITENING:
+    {
+        radio_pkt_params->dc_free = SX126X_GFSK_DC_FREE_WHITENING;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    return RAL_STATUS_OK;
+}
+
+static ral_status_t ral_sx126x_convert_lora_mod_params_from_ral( const ral_lora_mod_params_t* ral_mod_params,
+                                                                 sx126x_mod_params_lora_t*    radio_mod_params )
+{
+    radio_mod_params->sf = ( sx126x_lora_sf_t ) ral_mod_params->sf;
+
+    switch( ral_mod_params->bw )
+    {
+    case RAL_LORA_BW_007_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_007;
+        break;
+    }
+    case RAL_LORA_BW_010_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_010;
+        break;
+    }
+    case RAL_LORA_BW_015_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_015;
+        break;
+    }
+    case RAL_LORA_BW_020_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_020;
+        break;
+    }
+    case RAL_LORA_BW_031_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_031;
+        break;
+    }
+    case RAL_LORA_BW_041_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_041;
+        break;
+    }
+    case RAL_LORA_BW_062_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_062;
+        break;
+    }
+    case RAL_LORA_BW_125_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_125;
+        break;
+    }
+    case RAL_LORA_BW_250_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_250;
+        break;
+    }
+    case RAL_LORA_BW_500_KHZ:
+    {
+        radio_mod_params->bw = SX126X_LORA_BW_500;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_mod_params->cr = ( sx126x_lora_cr_t ) ral_mod_params->cr;
+
+    radio_mod_params->ldro = ral_mod_params->ldro;
+
+    return RAL_STATUS_OK;
+}
+
+static ral_status_t ral_sx126x_convert_lora_pkt_params_from_ral( const ral_lora_pkt_params_t* ral_pkt_params,
+                                                                 sx126x_pkt_params_lora_t*    radio_pkt_params )
+{
+    radio_pkt_params->preamble_len_in_symb = ral_pkt_params->preamble_len_in_symb;
+
+    switch( ral_pkt_params->header_type )
+    {
+    case( RAL_LORA_PKT_EXPLICIT ):
+    {
+        radio_pkt_params->header_type = SX126X_LORA_PKT_EXPLICIT;
+        break;
+    }
+    case( RAL_LORA_PKT_IMPLICIT ):
+    {
+        radio_pkt_params->header_type = SX126X_LORA_PKT_IMPLICIT;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_pkt_params->pld_len_in_bytes = ral_pkt_params->pld_len_in_bytes;
+    radio_pkt_params->crc_is_on        = ral_pkt_params->crc_is_on;
+    radio_pkt_params->invert_iq_is_on  = ral_pkt_params->invert_iq_is_on;
+
+    return RAL_STATUS_OK;
+}
+
+static ral_status_t ral_sx126x_convert_lora_cad_params_from_ral( const ral_lora_cad_params_t* ral_lora_cad_params,
+                                                                 sx126x_cad_params_t*         radio_lora_cad_params )
+{
+    switch( ral_lora_cad_params->cad_symb_nb )
+    {
+    case RAL_LORA_CAD_01_SYMB:
+    {
+        radio_lora_cad_params->cad_symb_nb = SX126X_CAD_01_SYMB;
+        break;
+    }
+    case RAL_LORA_CAD_02_SYMB:
+    {
+        radio_lora_cad_params->cad_symb_nb = SX126X_CAD_02_SYMB;
+        break;
+    }
+    case RAL_LORA_CAD_04_SYMB:
+    {
+        radio_lora_cad_params->cad_symb_nb = SX126X_CAD_04_SYMB;
+        break;
+    }
+    case RAL_LORA_CAD_08_SYMB:
+    {
+        radio_lora_cad_params->cad_symb_nb = SX126X_CAD_08_SYMB;
+        break;
+    }
+    case RAL_LORA_CAD_16_SYMB:
+    {
+        radio_lora_cad_params->cad_symb_nb = SX126X_CAD_16_SYMB;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_lora_cad_params->cad_detect_peak = ral_lora_cad_params->cad_det_peak_in_symb;
+    radio_lora_cad_params->cad_detect_min  = ral_lora_cad_params->cad_det_min_in_symb;
+
+    switch( ral_lora_cad_params->cad_exit_mode )
+    {
+    case RAL_LORA_CAD_ONLY:
+    {
+        radio_lora_cad_params->cad_exit_mode = SX126X_CAD_ONLY;
+        break;
+    }
+    case RAL_LORA_CAD_RX:
+    {
+        radio_lora_cad_params->cad_exit_mode = SX126X_CAD_RX;
+        break;
+    }
+    case RAL_LORA_CAD_LBT:
+    {
+        radio_lora_cad_params->cad_exit_mode = SX126X_CAD_LBT;
+        break;
+    }
+    default:
+    {
+        return RAL_STATUS_UNKNOWN_VALUE;
+    }
+    }
+
+    radio_lora_cad_params->cad_timeout = ral_lora_cad_params->cad_timeout_in_ms;
+
+    return RAL_STATUS_OK;
 }
 
 /* --- EOF ------------------------------------------------------------------ */

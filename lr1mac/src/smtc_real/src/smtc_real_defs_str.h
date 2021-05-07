@@ -39,13 +39,13 @@
 extern "C" {
 #endif
 
-#if BSP_DBG_TRACE == BSP_FEATURE_ON
+#if MODEM_HAL_DBG_TRACE == MODEM_HAL_FEATURE_ON
 static const char* smtc_real_region_list_str[] = {
 #if defined( REGION_EU_868 )
     [SMTC_REAL_REGION_EU_868] = "EU868",
 #endif
 #if defined( REGION_AS_923 )
-    [SMTC_REAL_REGION_AS_923] = "AS923",
+    [SMTC_REAL_REGION_AS_923] = "AS923_GRP1",
 #endif
 #if defined( REGION_US_915 )
     [SMTC_REAL_REGION_US_915] = "US915",
@@ -59,7 +59,26 @@ static const char* smtc_real_region_list_str[] = {
 #if defined( REGION_WW2G4 )
     [SMTC_REAL_REGION_WW2G4] = "WW2G4",
 #endif
+#if defined( REGION_AS_923 )
+    [SMTC_REAL_REGION_AS_923_GRP2] = "AS923_GRP2",
+#endif
+#if defined( REGION_AS_923 )
+    [SMTC_REAL_REGION_AS_923_GRP3] = "AS923_GRP3",
+#endif
+#if defined( REGION_IN_865 )
+    [SMTC_REAL_REGION_IN_865] = "IN_865",
+#endif
+#if defined( REGION_KR_920 )
+    [SMTC_REAL_REGION_KR_920] = "KR_920",
+#endif
+#if defined( REGION_RU_864 )
+    [SMTC_REAL_REGION_RU_864] = "RU_864",
+#endif
+#if defined( REGION_CN_470_RP_1_0 )
+    [SMTC_REAL_REGION_CN_470_RP_1_0] = "CN470_RP_1_0",
+#endif
 };
+
 #endif
 
 #endif  // __REAL_DEFS_STR_H__

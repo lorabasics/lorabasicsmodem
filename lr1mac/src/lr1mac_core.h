@@ -39,6 +39,7 @@
 #include "stdint.h"
 #include "lr1mac_defs.h"
 #include "lr1_stack_mac_layer.h"
+#include "smtc_duty_cycle.h"
 
 /*
  *-----------------------------------------------------------------------------------
@@ -54,8 +55,9 @@
  *            OTAA or ABP Flag.
  *         In future implementation A Radio objet will be also a parameter of this class.
  */
-
-void lr1mac_core_init( radio_planner_t* rp, lorawan_keys_t* lorawan_keys, smtc_real_t* smtc_region );
+void lr1mac_core_init( lr1_stack_mac_t* lr1_mac_obj, smtc_lbt_t* lbt_obj, smtc_dtc_t* dtc_obj, radio_planner_t* rp,
+                       lorawan_keys_t* lorawan_keys, smtc_real_region_types_t smtc_real_region_types,
+                       void ( *push_callback )( void* push_context ), void*   push_context );
 
 /*!
      * \brief Sends an uplink
@@ -80,8 +82,8 @@ void lr1mac_core_init( radio_planner_t* rp, lorawan_keys_t* lorawan_keys, smtc_r
 
      * \param [OUT] status_lorawan_t   Return an error if No Packet available.
      */
-status_lorawan_t lr1mac_core_payload_receive( uint8_t* UserRxFport, uint8_t* UserRxPayload,
-                                              uint8_t* UserRxPayloadSize );
+status_lorawan_t lr1mac_core_payload_receive( lr1_stack_mac_t* lr1_mac_obj, uint8_t* UserRxFport,
+                                              uint8_t* UserRxPayload, uint8_t* UserRxPayloadSize );
 
 /*!
  * \brief to Send a Join request
@@ -91,7 +93,7 @@ status_lorawan_t lr1mac_core_payload_receive( uint8_t* UserRxFport, uint8_t* Use
  *                                                 => return Error In case of the Lorawan stack previous state is not
  * equal to idle
  */
-lr1mac_states_t lr1mac_core_join( uint32_t target_time_ms );
+lr1mac_states_t lr1mac_core_join( lr1_stack_mac_t* lr1_mac_obj, uint32_t target_time_ms );
 
 /*!
  * \brief Returns the join state
@@ -100,15 +102,21 @@ lr1mac_states_t lr1mac_core_join( uint32_t target_time_ms );
  *                                             JOINED: the device is not connected
  *                                             Always returns JOINED for ABP devices
  */
-join_status_t lr1mac_core_is_joined( void );
+join_status_t lr1mac_core_is_joined( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief Reset the join status to NotJoined
  * \param [] None
  * \param [OUT] None
  */
-void lr1mac_core_join_status_clear( void );
+void lr1mac_core_join_status_clear( lr1_stack_mac_t* lr1_mac_obj );
 
+/*!
+ * \brief abort loRawan task
+ * \param [] None
+ * \param [OUT] None
+ */
+void lr1mac_core_abort( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief SetDataRateStrategy of the devices
  * \remark Refereed to the dedicated chapter in Wiki page for detailed explanation about
@@ -122,9 +130,9 @@ void lr1mac_core_join_status_clear( void );
  * \param [IN]  dr_strategy_t              DataRate Mode (describe above)
  * \param [OUT] None
  */
-void          lr1mac_core_dr_strategy_set( dr_strategy_t adrModeSelect );
-dr_strategy_t lr1mac_core_dr_strategy_get( void );
-void          lr1mac_core_dr_custom_set( uint32_t DataRateCustom );
+status_lorawan_t lr1mac_core_dr_strategy_set( lr1_stack_mac_t* lr1_mac_obj, dr_strategy_t adrModeSelect );
+dr_strategy_t    lr1mac_core_dr_strategy_get( lr1_stack_mac_t* lr1_mac_obj );
+void             lr1mac_core_dr_custom_set( lr1_stack_mac_t* lr1_mac_obj, uint32_t DataRateCustom );
 
 /*!
  * \brief   Runs the MAC layer state machine.
@@ -134,117 +142,117 @@ void          lr1mac_core_dr_custom_set( uint32_t DataRateCustom );
  * \param [IN]  AvailableRxPacket *            Return if an applicative packet is available
  * \param [OUT] lr1mac_states_t        return the lorawan state machine state
  */
-lr1mac_states_t lr1mac_core_process( user_rx_packet_type_t* AvailableRxPacket );
+lr1mac_states_t lr1mac_core_process( lr1_stack_mac_t* lr1_mac_obj, user_rx_packet_type_t* AvailableRxPacket );
 
 /*!
  * \brief   Return the state of the Radio
  * \param [IN]  none
  * \param [OUT] return the state of the radio (Not yet finalized will be replace by an enum)
  */
-uint8_t lr1mac_core_radio_state_get( void );
+uint8_t lr1mac_core_radio_state_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Reload the LoraWAN context saved in the flash
  * \param [IN]  none
  * \param [OUT] none
  */
-status_lorawan_t lr1mac_core_context_load( void );
+status_lorawan_t lr1mac_core_context_load( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief   Save The LoraWAN context  in the flash
  * \param [IN]  none
  * \param [OUT] none
  */
-void lr1mac_core_context_save( void );
+void lr1mac_core_context_save( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief   Get the snr of the last user receive packet
  * \param [IN]  none
  * \param [OUT] Int 16 last snr
  */
-int16_t lr1mac_core_last_snr_get( void );
+int16_t lr1mac_core_last_snr_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief   Get the snr of the last user receive packet
  * \param [IN]  none
  * \param [OUT] Int 16 last snr
  */
-int16_t lr1mac_core_last_rssi_get( void );
+int16_t lr1mac_core_last_rssi_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief   Store provisioning informations in flash
  * \param [IN]  none
  * \param [OUT] none
  */
-void lr1mac_core_keys_set( lorawan_keys_t LoRaWanKeys );
+void lr1mac_core_keys_set( lr1_stack_mac_t* lr1_mac_obj, lorawan_keys_t LoRaWanKeys );
 
 /*!
  * \brief   Reload the factory Config in the LoraWAN Stack
  * \param [IN]  none
  * \param [OUT] none
  */
-void lr1mac_core_factory_reset( void );  // load factory MAC context from constructor
+void lr1mac_core_factory_reset( lr1_stack_mac_t* lr1_mac_obj );  // load factory MAC context from constructor
 
 /*!
  * \brief Set Device type : OTAA or ABP
  * \param [IN]  none
  * \param [OUT] enum Ota Device Type     OTAA_DEVICE or ABP_DEVICE useful for certification,
  */
-void lr1mac_core_otaa_set( type_otaa_abp_t deviceType );
+void lr1mac_core_otaa_set( lr1_stack_mac_t* lr1_mac_obj, type_otaa_abp_t deviceType );
 
 /*!
  * \brief   Return the Max payload length allowed for the next transmit
- * \remark  DataRate + FOPTS + region  dependant ( )
+ * \remark  DataRate + FOPTS + region  dependant  (lr1_stack_mac_t  * lr1_mac_obj ,)
  * \remark  In any case if user set a too long payload, the send method will answer by an error status
  * \param [IN]  none
  * \param [OUT] Return max payload length for next Transmission
  */
-uint32_t lr1mac_core_next_max_payload_length_get( void );
+uint32_t lr1mac_core_next_max_payload_length_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Call this function to set the loraWan join variable in NOT_JOINED state
  * \param [IN]  none
  * \param [OUT] none
  */
-void lr1mac_core_new_join( void );
+void lr1mac_core_new_join( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the DevAddr of the device
  * \param [IN]  none
  * \param [OUT] return DevAddr
  */
-uint32_t lr1mac_core_devaddr_get( void );
+uint32_t lr1mac_core_devaddr_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the DevEUI of the device
  * \param [IN]  DevEUI *       Return the device EUI
  * \param [OUT] none
  */
-void lr1mac_core_deveui_get( uint8_t* DevEui );
+void lr1mac_core_deveui_get( lr1_stack_mac_t* lr1_mac_obj, uint8_t* DevEui );
 
 /*!
  * \brief   Set the DevEUI of the device
  * \param [IN]  DevEUI *       Device EUI
  * \param [OUT] none
  */
-void lr1mac_core_deveui_set( uint8_t* DevEui );
+void lr1mac_core_deveui_set( lr1_stack_mac_t* lr1_mac_obj, const uint8_t* DevEui );
 
 /*!
  * \brief   Set the AppKey of the device
  * \param [IN]  AppKey *
  * \param [OUT] none
  */
-void lr1mac_core_app_key_set( uint8_t* AppKey );
+void lr1mac_core_app_key_set( lr1_stack_mac_t* lr1_mac_obj, const uint8_t* AppKey );
 
 /*!
  * \brief   Get the AppEui of the device
  * \param [IN]  AppEui *
  * \param [OUT] none
  */
-void lr1mac_core_appeui_key_get( uint8_t* AppEui );
+void lr1mac_core_appeui_key_get( lr1_stack_mac_t* lr1_mac_obj, uint8_t* AppEui );
 
 /*!
  * \brief   Set the AppEui of the device
  * \param [IN]  AppEui *
  * \param [OUT] none
  */
-void lr1mac_core_appeui_key_set( uint8_t* AppEui );
+void lr1mac_core_appeui_key_set( lr1_stack_mac_t* lr1_mac_obj, const uint8_t* AppEui );
 
 /*!
  * \brief   Return the next transmission power
@@ -252,7 +260,7 @@ void lr1mac_core_appeui_key_set( uint8_t* AppEui );
  * \param [IN]  none
  * \param [OUT] return the next transmission power
  */
-uint8_t lr1mac_core_next_power_get( void );
+uint8_t lr1mac_core_next_power_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the returns the next data rate
@@ -260,7 +268,7 @@ uint8_t lr1mac_core_next_power_get( void );
  * \param [IN]  none
  * \param [OUT] return the next transmission power
  */
-uint8_t lr1mac_core_next_dr_get( void );
+uint8_t lr1mac_core_next_dr_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the returns the next Tx Frequency
@@ -269,7 +277,7 @@ uint8_t lr1mac_core_next_dr_get( void );
  * \param [OUT] return the next transmission power
  */
 
-uint32_t lr1mac_core_next_frequency_get( void );
+uint32_t lr1mac_core_next_frequency_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the returns the max data rate of all enabled channels
@@ -277,7 +285,15 @@ uint32_t lr1mac_core_next_frequency_get( void );
  * \param [IN]  none
  * \param [OUT] return the max data rate
  */
-uint8_t lr1mac_core_max_dr_get( void );
+uint8_t lr1mac_core_max_tx_dr_get( lr1_stack_mac_t* lr1_mac_obj );
+
+/*!
+ * \brief   Return the returns the current data rate mask of all enabled channels
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return the mask data rate
+ */
+uint16_t lr1mac_core_mask_tx_dr_channel_up_dwell_time_check( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   Return the returns the min data rate of all enabled channels
@@ -286,7 +302,7 @@ uint8_t lr1mac_core_max_dr_get( void );
  * \param [OUT] return the min data rate
  */
 
-uint8_t lr1mac_core_min_dr_get( void );
+uint8_t lr1mac_core_min_tx_dr_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief   returns the current state of the MAC layer.
@@ -300,65 +316,65 @@ uint8_t lr1mac_core_min_dr_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-lr1mac_states_t lr1mac_core_state_get( void );
+lr1mac_states_t lr1mac_core_state_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-type_otaa_abp_t lr1mac_core_is_otaa_device( void );
+type_otaa_abp_t lr1mac_core_is_otaa_device( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint16_t lr1mac_core_nb_reset_get( void );
+uint16_t lr1mac_core_nb_reset_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint16_t lr1mac_core_devnonce_get( void );
+uint16_t lr1mac_core_devnonce_get( lr1_stack_mac_t* lr1_mac_obj );
+/*!
+ * \brief Get app skey addr
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return app session key
+ */
+uint8_t* lr1mac_core_apps_key_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void lr1mac_core_apps_key_get( uint8_t* key );
+join_status_t lr1_mac_joined_status_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-join_status_t lr1_mac_joined_status_get( void );
+lr1mac_states_t lr1mac_core_payload_send( lr1_stack_mac_t* lr1_mac_obj, uint8_t fPort, const uint8_t* dataIn,
+                                          const uint8_t sizeIn, uint8_t PacketType, uint32_t target_time_ms );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-lr1mac_states_t lr1mac_core_payload_send( uint8_t fPort, const uint8_t* dataIn, const uint8_t sizeIn,
-                                          uint8_t PacketType, uint32_t target_time_ms );
+lr1mac_states_t lr1mac_core_payload_send_at_time( lr1_stack_mac_t* lr1_mac_obj, uint8_t fport, const uint8_t* data_in,
+                                                  const uint8_t size_in, uint8_t packet_type, uint32_t target_time_ms );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-lr1mac_states_t lr1mac_core_payload_send_at_time( uint8_t fport, const uint8_t* data_in, const uint8_t size_in,
-                                                  uint8_t packet_type, uint32_t target_time_ms );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-radio_planner_t* lr1mac_core_rp_get( void );
+radio_planner_t* lr1mac_core_rp_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief
@@ -366,7 +382,7 @@ radio_planner_t* lr1mac_core_rp_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-int8_t lr1mac_core_tx_power_offset_get( void );
+int8_t lr1mac_core_tx_power_offset_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief
@@ -374,7 +390,7 @@ int8_t lr1mac_core_tx_power_offset_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-void lr1mac_core_tx_power_offset_set( int8_t power_off );
+void lr1mac_core_tx_power_offset_set( lr1_stack_mac_t* lr1_mac_obj, int8_t power_off );
 
 /*!
  * \brief
@@ -382,42 +398,42 @@ void lr1mac_core_tx_power_offset_set( int8_t power_off );
  * \param [IN]  none
  * \param [OUT] return
  */
-receive_win_t lr1mac_core_rx_window_get( void );
+receive_win_t lr1mac_core_rx_window_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint32_t lr1mac_core_fcnt_up_get( void );
+uint32_t lr1mac_core_fcnt_up_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint32_t lr1mac_core_next_join_time_second_get( void );
+uint32_t lr1mac_core_next_join_time_second_get( lr1_stack_mac_t* lr1_mac_obj );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-int32_t lr1mac_core_next_free_duty_cycle_ms_get( void );
+int32_t lr1mac_core_next_free_duty_cycle_ms_get( lr1_stack_mac_t* lr1_mac_obj );
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] uint8_t
+ */
+uint8_t lr1mac_core_duty_cycle_enable_set( lr1_stack_mac_t* lr1_mac_obj, bool enable );
 /*!
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void lr1mac_core_duty_cycle_enable_set( uint8_t enable );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint32_t lr1mac_core_version_get( void );
+uint32_t lr1mac_core_version_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief
@@ -425,7 +441,7 @@ uint32_t lr1mac_core_version_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-uint8_t lr1mac_core_rx_ack_bit_get( void );
+uint8_t lr1mac_core_rx_ack_bit_get( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief
@@ -433,7 +449,7 @@ uint8_t lr1mac_core_rx_ack_bit_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-lr1_stack_mac_t* lr1mac_core_stack_mac_get( void );
+status_lorawan_t lr1mac_core_is_supported_region( lr1_stack_mac_t* lr1_mac_obj, smtc_real_region_types_t region_type );
 
 /*!
  * \brief
@@ -441,7 +457,7 @@ lr1_stack_mac_t* lr1mac_core_stack_mac_get( void );
  * \param [IN]  none
  * \param [OUT] return
  */
-status_lorawan_t lr1mac_core_is_supported_region( smtc_real_region_types_t region_type );
+smtc_real_region_types_t lr1mac_core_get_region( lr1_stack_mac_t* lr1_mac_obj );
 
 /*!
  * \brief
@@ -449,13 +465,66 @@ status_lorawan_t lr1mac_core_is_supported_region( smtc_real_region_types_t regio
  * \param [IN]  none
  * \param [OUT] return
  */
-smtc_real_region_types_t lr1mac_core_get_region( void );
+status_lorawan_t lr1mac_core_set_region( lr1_stack_mac_t* lr1_mac_obj, smtc_real_region_types_t region_type );
 
 /*!
  * \brief
  * \remark
  * \param [IN]  none
- * \param [OUT] return
+ * \param [OUT] status_lorawan_t
  */
-status_lorawan_t lr1mac_core_set_region( smtc_real_region_types_t region_type );
+status_lorawan_t lr1mac_core_set_no_rx_packet_count_config( lr1_stack_mac_t* lr1_mac_obj, uint16_t no_rx_packet_count );
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] uint32_t
+ */
+uint16_t lr1mac_core_get_no_rx_packet_count_config( lr1_stack_mac_t* lr1_mac_obj );
+
+/**
+ * @brief
+ *
+ * @param lr1_mac_obj
+ * @return uint16_t
+ */
+uint16_t lr1mac_core_get_no_rx_packet_count_current( lr1_stack_mac_t* lr1_mac_obj );
+
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] uint32_t
+ */
+uint16_t lr1mac_core_get_no_rx_packet_count_in_mobile_mode( lr1_stack_mac_t* lr1_mac_obj );
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] void
+ */
+void lr1mac_core_set_no_rx_packet_count_in_mobile_mode( lr1_stack_mac_t* lr1_mac_obj, uint16_t no_rx_packet_count );
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] bool
+ */
+bool lr1mac_core_available_link_adr_get( lr1_stack_mac_t* lr1_mac_obj );
+
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] bool
+ */
+void lr1mac_core_certification_set( lr1_stack_mac_t* lr1_mac_obj, uint8_t enable );
+
+/*!
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] bool
+ */
+uint8_t lr1mac_core_certification_get( lr1_stack_mac_t* lr1_mac_obj );
 #endif

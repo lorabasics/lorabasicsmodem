@@ -14,4 +14,4 @@ All services supported by the modem and the LoRaCloud (file upload, streaming, a
 The soft modem task scheduler
 
 * test_modem:  
-Here is handled the soft modem test mode functions. To be used only for debug/certification purpose. 
+Here is handled the soft modem test mode

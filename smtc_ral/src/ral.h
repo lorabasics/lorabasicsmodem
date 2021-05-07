@@ -1,7 +1,7 @@
 /**
  * @file      ral.h
  *
- * @brief     Radio Abstraction Layer (RAL) API definition
+ * @brief     Radio abstraction layer definition
  *
  * Revised BSD License
  * Copyright Semtech Corporation 2020. All rights reserved.
@@ -29,8 +29,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __RAL_H__
-#define __RAL_H__
+#ifndef RAL_H__
+#define RAL_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,9 +43,8 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
-
 #include "ral_defs.h"
-
+#include "ral_drv.h"
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC MACROS -----------------------------------------------------------
@@ -61,440 +60,704 @@ extern "C" {
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
 
+typedef struct ral_s
+{
+    const void* context;
+    ral_drv_t   driver;
+} ral_t;
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
  */
 
 /**
- * Radio initialization
+ * @brief Indicate whether the radio driver is capable of driving a specific part number
  *
- * @param [in] radio Pointer to radio data to be initialized
+ * @param [in] part_number Part number to be queried
  *
- * @retval status Operation status
+ * @returns true, if the driver is capable of driving part part_number
  */
-ral_status_t ral_init( const ral_t* ral );
+static inline bool ral_handles_part( const ral_t* radio, const char* part_number )
+{
+    return radio->driver.handles_part( part_number );
+}
 
 /**
- * Setup radio to transmit and receive data using GFSK modem
+ * @brief Reset the radio
  *
- * @remark When transmitting in GFSK mode the radio access may be blocking
+ * @remark This function performs a hardware of the radio
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem transmission parameters
+ * @param [in] radio  Pointer to radio data structure
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
+static inline ral_status_t ral_reset( const ral_t* radio )
+{
+    return radio->driver.reset( radio->context );
+}
 
 /**
- * Setup radio to receive data using GFSK modem
+ * @brief Initialize the radio
  *
- * @remark When receiving in GFSK mode the radio access may be blocking
+ * @remark This function shall be called after a power-on or when the chip leaves a sleep mode without retention.
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem reception parameters
-
- * @retval status Operation status
+ * @param [in] radio Pointer to radio data structure
+ *
+ * @returns Operation status
  */
-ral_status_t ral_setup_rx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
-
-/**
- * Setup radio to transmit data using GFSK modem
- *
- * @remark When transmitting in GFSK mode the radio access may be blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem transmission parameters
- *
- * @retval status Operation status
- */
-ral_status_t ral_setup_tx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
+static inline ral_status_t ral_init( const ral_t* radio )
+{
+    return radio->driver.init( radio->context );
+}
 
 /**
- * Setup radio to transmit and receive data using LoRa modem
+ * @brief Wake up the radio from sleep
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem transmission parameters
+ * @param [in] radio  Pointer to radio data structure
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_lora( const ral_t* ral, const ral_params_lora_t* params );
+static inline ral_status_t ral_wakeup( const ral_t* radio )
+{
+    return radio->driver.wakeup( radio->context );
+}
 
 /**
- * Setup radio to receive data using LoRa modem
+ * @brief Set the radio in sleep mode
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem reception parameters
+ * @param [in] radio          Pointer to radio data structure
+ * @param [in] retain_config  If true, radio configuration will be restored upon wakup
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_rx_lora( const ral_t* ral, const ral_params_lora_t* params );
+static inline ral_status_t ral_set_sleep( const ral_t* radio, const bool retain_config )
+{
+    return radio->driver.set_sleep( radio->context, retain_config );
+}
 
 /**
- * Setup radio to transmit data using LoRa modem
+ * @brief Set the chip in stand-by mode
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem transmission parameters
+ * @param [in] radio        Pointer to radio data structure
+ * @param [in] standby_cfg  Stand-by mode configuration
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_tx_lora( const ral_t* ral, const ral_params_lora_t* params );
+static inline ral_status_t ral_set_standby( const ral_t* radio, ral_standby_cfg_t standby_cfg )
+{
+    return radio->driver.set_standby( radio->context, standby_cfg );
+}
 
 /**
- * Setup radio to transmit and receive data using FLRC modem
+ * @brief Set the chip in frequency synthesis mode
  *
- * @remark Not all radios have this modem available
+ * @param [in] radio  Pointer to radio data structure
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem transmission parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+static inline ral_status_t ral_set_fs( const ral_t* radio )
+{
+    return radio->driver.set_fs( radio->context );
+}
 
 /**
- * Setup radio to receive data using FLRC modem
+ * @brief Set the chip in transmission mode
  *
- * @remark Not all radios have this modem available
+ * @param [in] radio  Pointer to radio data structure
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem reception parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_rx_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+static inline ral_status_t ral_set_tx( const ral_t* radio )
+{
+    return radio->driver.set_tx( radio->context );
+}
 
 /**
- * Setup radio to transmit data using FLRC modem
+ * @brief Set the chip in reception mode
  *
- * @remark Not all radios have this modem available
+ * @param [in] radio          Pointer to radio data structure
+ * @param [in] timeout_in_ms  Timeout for reception operation - in millisecond
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem transmission parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_tx_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+static inline ral_status_t ral_set_rx( const ral_t* radio, const uint32_t timeout_in_ms )
+{
+    return radio->driver.set_rx( radio->context, timeout_in_ms );
+}
 
 /**
- * Setup radio to transmit data using LoRaE modem
+ * @brief Set chip mode to be used after successful transmission or reception.
  *
- * @remark Not all radios have this modem available
+ * @remark This setting is not taken into account during Rx Duty Cycle mode or Auto TxRx - if available.
  *
- * @remark When transmitting in LoRaE mode the radio access may be blocking
+ * @param [in] radio          Pointer to radio data structure
+ * @param [in] fallback_mode  Selected fallback mode
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRaE modem transmission parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_tx_lora_e( const ral_t* ral, const ral_params_lora_e_t* params );
+static inline ral_status_t ral_set_rx_tx_fallback_mode( const ral_t* radio, const ral_fallback_modes_t fallback_mode )
+{
+    return radio->driver.set_rx_tx_fallback_mode( radio->context, fallback_mode );
+}
 
 /**
- * Setups radio and starts data transmission using BPSK modem
+ * @brief Configure the event on which the Rx timeout is stopped
  *
- * @remark Not all radios have this modem available
+ * @remark The two options are:
+ *   - Syncword / Header detection (default)
+ *   - Preamble detection
  *
- * @remark When transmitting in BPSK mode the radio access is blocking
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] enable  If true, the timer stops on Syncword / Header detection.
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params BPSK modem transmission parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_tx_bpsk( const ral_t* ral, const ral_params_bpsk_t* params );
+static inline ral_status_t ral_stop_timer_on_preamble( const ral_t* radio, const bool enable )
+{
+    return radio->driver.stop_timer_on_preamble( radio->context, enable );
+}
 
 /**
- * Setup radio in cad mode
+ * @brief Set the chip in reception mode with duty cycling
  *
- * @remark Not all radios have this feature available
+ * @param [in] radio             Pointer to radio data structure
+ * @param [in] rx_time_in_ms     The timeout of Rx period - in millisecond
+ * @param [in] sleep_time_in_ms  The length of sleep period - in millisecond
  *
- * @param [in] radio Pointer to radio data
- * @param [in] params CAD operation parameters
- *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_setup_cad( const ral_t* ral, const ral_lora_cad_params_t* params );
+static inline ral_status_t ral_set_rx_duty_cycle( const ral_t* radio, const uint32_t rx_time_in_ms,
+                                                  const uint32_t sleep_time_in_ms )
+{
+    return radio->driver.set_rx_duty_cycle( radio->context, rx_time_in_ms, sleep_time_in_ms );
+}
 
 /**
- * Fills radio transmission buffer
+ * @brief Set the chip in LoRa CAD (Channel Activity Detection) mode
  *
- * @param [in] radio Pointer to radio data
- * @param [in] buffer Pointer to the buffer to be transmitted
- * @param [in] size   Size of the buffer to be transmitted
+ * @remark The LoRa packet type shall be selected with @ref ral_set_pkt_type before this function is called.
  *
- * @retval status Operation status
+ * @param [in] radio  Pointer to radio data structure
+ *
+ * @returns Operation status
  */
-ral_status_t ral_set_pkt_payload( const ral_t* ral, const uint8_t* buffer, const uint16_t size );
+static inline ral_status_t ral_set_lora_cad( const ral_t* radio )
+{
+    return radio->driver.set_lora_cad( radio->context );
+}
 
 /**
- * Fetches radio reception buffer
+ * @brief Set the chip in Tx continuous wave (RF tone).
  *
- * @param [in]  radio      Pointer to radio data
- * @param [out] buffer     Pointer to the buffer to be filled with received data
- * @param [out] size       Size of the received buffer
- * @param [out] pkt_status Pointer a structure that will contain the Rx packet
- * status
+ * @remark A packet type shall be configured with @ref ral_set_pkt_type before using this command.
  *
- * @retval status Operation status
+ * @param [in] radio  Pointer to radio data structure
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_pkt_payload( const ral_t* ral, uint8_t* buffer, uint16_t max_size, uint16_t* size );
+static inline ral_status_t ral_set_tx_cw( const ral_t* radio )
+{
+    return radio->driver.set_tx_cw( radio->context );
+}
 
 /**
- * Fetches packet status
+ * @brief Set the chip in Tx infinite preamble (modulated signal).
  *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
+ * @remark A packet type shall be configured with @ref ral_get_pkt_type before using this command.
  *
- * @retval status Operation status
+ * @param [in] radio  Pointer to radio data structure
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_gfsk_pkt_status( const ral_t* ral, ral_rx_pkt_status_gfsk_t* pkt_status );
+static inline ral_status_t ral_set_tx_infinite_preamble( const ral_t* radio )
+{
+    return radio->driver.set_tx_infinite_preamble( radio->context );
+}
 
 /**
- * Fetches packet status
+ * @brief Configure the transmission-related parameters
  *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
+ * @details
  *
- * @retval status Operation status
+ * @param [in] radio              Pointer to radio data structure
+ * @param [in] output_pwr_in_dbm  Output power - in dBm
+ * @param [in] rf_freq_in_hz      RF frequency - in Hertz
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_lora_pkt_status( const ral_t* ral, ral_rx_pkt_status_lora_t* pkt_status );
+static inline ral_status_t ral_set_tx_cfg( const ral_t* radio, const int8_t output_pwr_in_dbm,
+                                           const uint32_t rf_freq_in_hz )
+{
+    return radio->driver.set_tx_cfg( radio->context, output_pwr_in_dbm, rf_freq_in_hz );
+}
 
 /**
- * Fetches incoming LoRa packet configuration
+ * @brief Fill the radio transmission buffer with data
  *
- * @param [in]  radio         Pointer to radio data
- * @param [out] rx_cr         Pointer to a placeholder for coding rate value
- * @param [out] rx_is_crc_en  Pointer to a placeholder for CRC status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] buffer  Pointer to the buffer to be transmitted
+ * @param [in] size    Size of the buffer to be transmitted
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_lora_incoming_pkt_config( const ral_t* ral, ral_lora_cr_t* rx_cr, bool* rx_is_crc_en );
+static inline ral_status_t ral_set_pkt_payload( const ral_t* radio, const uint8_t* buffer, const uint16_t size )
+{
+    return radio->driver.set_pkt_payload( radio->context, buffer, size );
+}
 
 /**
- * Fetches packet status
+ * @brief Fetch data from the radio reception buffer
  *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
+ * @param [in] radio             Pointer to radio data structure
+ * @param [in] max_size_in_bytes  Size of the application buffer - in bytes
+ * @param [out] buffer           Pointer to the buffer to be filled with received data
+ * @param [out] size_in_bytes     Size of the received buffer - in bytes
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_flrc_pkt_status( const ral_t* ral, ral_rx_pkt_status_flrc_t* pkt_status );
+static inline ral_status_t ral_get_pkt_payload( const ral_t* radio, uint16_t max_size_in_bytes, uint8_t* buffer,
+                                                uint16_t* size_in_bytes )
+{
+    return radio->driver.get_pkt_payload( radio->context, max_size_in_bytes, buffer, size_in_bytes );
+}
 
 /**
- * Radio is set in Sleep mode
+ * @brief Get the current radio irq status
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio  Pointer to radio data structure
+ * @param [out] irq   Pointer to interrupt mask
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_sleep( const ral_t* ral );
+static inline ral_status_t ral_get_irq_status( const ral_t* radio, ral_irq_t* irq )
+{
+    return radio->driver.get_irq_status( radio->context, irq );
+}
 
 /**
- * Radio is set in Standby mode
+ * @brief Clear radio irq status
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio  Pointer to radio data structure
+ * @param [in] irq    Interrupts to be cleared
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_standby( const ral_t* ral );
+static inline ral_status_t ral_clear_irq_status( const ral_t* radio, const ral_irq_t irq )
+{
+    return radio->driver.clear_irq_status( radio->context, irq );
+}
 
 /**
- * Radio is set in Tx mode
+ * @brief Clear any radio irq status flags that are set and returns the flags that were cleared
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio  Pointer to radio data structure
+ * @param [out] irq   Pointer to interrupt mask
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_tx( const ral_t* ral );
+static inline ral_status_t ral_get_and_clear_irq_status( const ral_t* radio, ral_irq_t* irq )
+{
+    return radio->driver.get_and_clear_irq_status( radio->context, irq );
+}
 
 /**
- * Radio is set in Tx CW mode
+ * @brief Enable interrupts. If the chip has several IRQ lines, the first is used.
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio  Pointer to radio data structure
+ * @param [in] irq    Interrupt to be enabled
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_tx_cw( const ral_t* ral );
+static inline ral_status_t ral_set_dio_irq_params( const ral_t* radio, const ral_irq_t irq )
+{
+    return radio->driver.set_dio_irq_params( radio->context, irq );
+}
 
 /**
- * Radio is set in Rx mode
+ * @brief Set the RF frequency for future radio operations
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio       Pointer to radio data structure
+ * @param [in] freq_in_hz  The frequency to set for radio operations - in Hertz
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_rx( const ral_t* ral, const uint32_t timeout_ms );
+static inline ral_status_t ral_set_rf_freq( const ral_t* radio, const uint32_t freq_in_hz )
+{
+    return radio->driver.set_rf_freq( radio->context, freq_in_hz );
+}
 
 /**
- * Radio is set in CAD mode
+ * @brief Set the packet type
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio     Pointer to radio data structure
+ * @param [in] pkt_type  Packet type to set
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_set_cad( const ral_t* ral );
+static inline ral_status_t ral_set_pkt_type( const ral_t* radio, const ral_pkt_type_t pkt_type )
+{
+    return radio->driver.set_pkt_type( radio->context, pkt_type );
+}
 
 /**
- * Gets current radio irq status
+ * @brief Set the modulation parameters for GFSK packets
  *
- * @param [in] radio Pointer to radio data
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_GFSK parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of GFSK modulation configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_irq_status( const ral_t* ral, ral_irq_t* ral_irq );
+static inline ral_status_t ral_set_gfsk_mod_params( const ral_t* radio, const ral_gfsk_mod_params_t* params )
+{
+    return radio->driver.set_gfsk_mod_params( radio->context, params );
+}
 
 /**
- * Clears radio irq status
+ * @brief Set the packet parameters for GFSK packets
  *
- * @param [in] radio Pointer to radio data
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_GFSK parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of GFSK packet configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_clear_irq_status( const ral_t* ral, const ral_irq_t ral_irq );
+static inline ral_status_t ral_set_gfsk_pkt_params( const ral_t* radio, const ral_gfsk_pkt_params_t* params )
+{
+    return radio->driver.set_gfsk_pkt_params( radio->context, params );
+}
 
 /**
- * Clears any radio irq status flags that are set and returns the flags that
- * were cleared.
+ * @brief Set the modulation parameters for LoRa packets
  *
- * @param [in] radio Pointer to radio data
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_LORA parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of LoRa modulation configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_and_clear_irq_status( const ral_t* ral, ral_irq_t* ral_irq );
+static inline ral_status_t ral_set_lora_mod_params( const ral_t* radio, const ral_lora_mod_params_t* params )
+{
+    return radio->driver.set_lora_mod_params( radio->context, params );
+}
 
 /**
- * Enable interrupts. If the chip has several IRQ lines, the first is used.
+ * @brief Set the packet parameters for LoRa packets
  *
- * @param [in] radio Pointer to radio data
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_LORA parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of LoRa packet configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_set_dio_irq_params( const ral_t* ral, const ral_irq_t ral_irq );
+static inline ral_status_t ral_set_lora_pkt_params( const ral_t* radio, const ral_lora_pkt_params_t* params )
+{
+    return radio->driver.set_lora_pkt_params( radio->context, params );
+}
 
 /**
- * Retrives the current radio irq status
+ * @brief Set the parameters for LoRa CAD operation
  *
- * @remark Must be the first function to be called by the radio IRQ handler
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_LORA parameter must be called prior to this one.
  *
- * @param [in] radio Pointer to radio data
- * @param [out] irq_status Current radio irq status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of LoRa CAD configuration
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_process_irq( const ral_t* ral, ral_irq_t* ral_irq );
+static inline ral_status_t ral_set_lora_cad_params( const ral_t* radio, const ral_lora_cad_params_t* params )
+{
+    return radio->driver.set_lora_cad_params( radio->context, params );
+}
 
 /**
- * Gets current RSSI value
+ * @brief Configure the LoRa modem to issue a RX timeout after an exact number
+ * of symbols given in parameter if no LoRa modulation is detected
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] nb_of_symbs number of symbols to compute the timeout
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_rssi( const ral_t* ral, int16_t* rssi );
+static inline ral_status_t ral_set_lora_symb_nb_timeout( const ral_t* radio, const uint8_t nb_of_symbs )
+{
+    return radio->driver.set_lora_symb_nb_timeout( radio->context, nb_of_symbs );
+}
 
 /**
- * Gets time on air, in milliseconds
+ * @brief Set the modulation parameters for FLRC packets
  *
- * @param [in] params Modem transmission parameters
- * @param [out] toa   Time on air
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_FLRC parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of FLRC modulation configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_lora_time_on_air_in_ms( const ral_t* ral, const ral_params_lora_t* params, uint32_t* toa );
+static inline ral_status_t ral_set_flrc_mod_params( const ral_t* radio, const ral_flrc_mod_params_t* params )
+{
+    return radio->driver.set_flrc_mod_params( radio->context, params );
+}
 
 /**
- * Gets time on air, in milliseconds
+ * @brief Set the packet parameters for FLRC packets
  *
- * @param [in] params Modem transmission parameters
- * @param [out] toa   Time on air
+ * @remark The command @ref ral_set_pkt_type with @ref RAL_PKT_TYPE_FLRC parameter must be called prior to this one.
  *
- * @retval status Operation status
+ * @param [in] radio   Pointer to radio data structure
+ * @param [in] params  The structure of FLRC packet configuration
+ *
+ * @returns Operation status
  */
-ral_status_t ral_get_gfsk_time_on_air_in_ms( const ral_t* ral, const ral_params_gfsk_t* params, uint32_t* toa );
+static inline ral_status_t ral_set_flrc_pkt_params( const ral_t* radio, const ral_flrc_pkt_params_t* params )
+{
+    return radio->driver.set_flrc_pkt_params( radio->context, params );
+}
 
 /**
- * Gets time on air, in milliseconds
+ * @brief Get the status of the last GFSK packet received
  *
- * @param [in] params Modem transmission parameters
- * @param [out] toa   Time on air
+ * @param [in] radio           Pointer to radio data structure
+ * @param [out] rx_pkt_status  Pointer to a structure to store the packet status
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_flrc_time_on_air_in_ms( const ral_t* ral, const ral_params_flrc_t* params, uint32_t* toa );
+static inline ral_status_t ral_get_gfsk_rx_pkt_status( const ral_t* radio, ral_gfsk_rx_pkt_status_t* rx_pkt_status )
+{
+    return radio->driver.get_gfsk_rx_pkt_status( radio->context, rx_pkt_status );
+}
 
 /**
- * Gets TX power consumption, in micro_ampere
+ * @brief Get the status of the last LoRa packet received
  *
- * @param [in] params Modem parameters
- * @param [out] micro_ampere
+ * @param [in] radio           Pointer to radio data structure
+ * @param [out] rx_pkt_status  Pointer to a structure to store the packet status
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_lora_tx_consumption_in_ua( const ral_t* ral, const ral_params_lora_t* params,
-                                                uint32_t* micro_ampere );
+static inline ral_status_t ral_get_lora_rx_pkt_status( const ral_t* radio, ral_lora_rx_pkt_status_t* rx_pkt_status )
+{
+    return radio->driver.get_lora_rx_pkt_status( radio->context, rx_pkt_status );
+}
 
 /**
- * Gets RX power consumption, in micro_ampere
+ * @brief Get the status of the last FLRC packet received
  *
- * @param [in] params Modem parameters
- * @param [out] micro_ampere
+ * @param [in] radio           Pointer to radio data structure
+ * @param [out] rx_pkt_status  Pointer to a structure to store the packet status
  *
- * @retval status Operation status
+ * @returns Operation status
  */
-ral_status_t ral_get_lora_rx_consumption_in_ua( const ral_t* ral, const ral_params_lora_t* params,
-                                                uint32_t* micro_ampere );
+static inline ral_status_t ral_get_flrc_rx_pkt_status( const ral_t* radio, ral_flrc_rx_pkt_status_t* rx_pkt_status )
+{
+    return radio->driver.get_flrc_rx_pkt_status( radio->context, rx_pkt_status );
+}
 
 /**
- * Turns TCXO on.
+ * @brief Get the instantaneous RSSI value.
  *
- * @param [in] radio Pointer to radio data
+ * @remark This function shall be called when in reception mode.
  *
- * @retval status Operation status
+ * @param [in] radio         Pointer to radio data structure
+ * @param [out] rssi_in_dbm  Pointer to a variable to store the RSSI value in dBm
+ *
+ * @returns Operation status
  */
-ral_status_t ral_set_tcxo_on( const ral_t* ral );
+static inline ral_status_t ral_get_rssi_inst( const ral_t* radio, int16_t* rssi_in_dbm )
+{
+    return radio->driver.get_rssi_inst( radio->context, rssi_in_dbm );
+}
 
 /**
- * Turns TCXO off.
+ * @brief Get the time on air in ms for LoRa transmission
  *
- * @param [in] radio Pointer to radio data
+ * @param [in] pkt_p  Pointer to a structure holding the LoRa packet parameters
+ * @param [in] mod_p  Pointer to a structure holding the LoRa modulation parameters
  *
- * @retval status Operation status
+ * @returns Time-on-air value in ms for LoRa transmission
  */
-ral_status_t ral_set_tcxo_off( const ral_t* ral );
+static inline uint32_t ral_get_lora_time_on_air_in_ms( const ral_t* radio, const ral_lora_pkt_params_t* pkt_p,
+                                                       const ral_lora_mod_params_t* mod_p )
+{
+    return radio->driver.get_lora_time_on_air_in_ms( pkt_p, mod_p );
+}
 
 /**
- * Gets register values
+ * @brief Get the time on air in millisecond for GFSK transmission
  *
- * @param [in]  radio Pointer to radio data
- * @param [in]  address Address of the first register to read
- * @param [out] buffer Pointer to store data
- * @param [in]  size Number of bytes to read
+ * @param [in] pkt_p  Pointer to a structure holding the GFSK packet parameters
+ * @param [in] mod_p  Pointer to a structure holding the GFSK modulation parameters
  *
- * @retval status Operation status
+ * @returns Time-on-air value in ms for GFSK transmission
  */
-ral_status_t ral_read_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size );
+static inline uint32_t ral_get_gfsk_time_on_air_in_ms( const ral_t* radio, const ral_gfsk_pkt_params_t* pkt_p,
+                                                       const ral_gfsk_mod_params_t* mod_p )
+{
+    return radio->driver.get_gfsk_time_on_air_in_ms( pkt_p, mod_p );
+}
 
 /**
- * Write register values
+ * @brief Get the time on air in millisecond for FLRC transmission
  *
- * @param [in] radio Pointer to radio data
- * @param [in] address Address of the first register to write
- * @param [in] buffer Pointer to store data
- * @param [in] size Number of bytes to write
+ * @param [in] pkt_p  Pointer to a structure holding the FLRC packet parameters
+ * @param [in] mod_p  Pointer to a structure holding the FLRC modulation parameters
  *
- * @retval status Operation status
+ * @returns Time-on-air value in ms for FLRC transmission
  */
-ral_status_t ral_write_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size );
+static inline uint32_t ral_get_flrc_time_on_air_in_ms( const ral_t* radio, const ral_flrc_pkt_params_t* pkt_p,
+                                                       const ral_flrc_mod_params_t* mod_p )
+{
+    return radio->driver.get_flrc_time_on_air_in_ms( pkt_p, mod_p );
+}
+
+/**
+ * @brief Configure the sync word used in GFSK packet
+ *
+ * @param [in] radio          Pointer to radio data structure
+ * @param [in] sync_word      Buffer holding the sync word to be configured
+ * @param [in] sync_word_len  Sync word length in bytes
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_gfsk_sync_word( const ral_t* radio, const uint8_t* sync_word,
+                                                   const uint8_t sync_word_len )
+{
+    return radio->driver.set_gfsk_sync_word( radio->context, sync_word, sync_word_len );
+}
+
+/**
+ * @brief Configure the sync word used in LoRa packet
+ *
+ * @remark In the case of a LoRaWAN use case, the two following values are specified:
+ *   - 0x12 for a private LoRaWAN network (default)
+ *   - 0x34 for a public LoRaWAN network
+ *
+ * @param [in] radio      Pointer to radio data structure
+ * @param [in] sync_word  Sync word to be configured
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_lora_sync_word( const ral_t* radio, const uint8_t sync_word )
+{
+    return radio->driver.set_lora_sync_word( radio->context, sync_word );
+}
+
+/**
+ * @brief Configure the sync word used in FLRC packet
+ *
+ * @param [in] radio          Pointer to radio data structure
+ * @param [in] sync_word      Buffer holding the sync word to be configured
+ * @param [in] sync_word_len  Sync word length in bytes
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_flrc_sync_word( const ral_t* radio, const uint8_t* sync_word,
+                                                   const uint8_t sync_word_len )
+{
+    return radio->driver.set_flrc_sync_word( radio->context, sync_word, sync_word_len );
+}
+
+/**
+ * @brief Configure the seed used to compute CRC in GFSK packet
+ *
+ * @param [in] radio       Pointer to radio data structure
+ * @param [in] seed        Seed value used to compute the CRC value
+ * @param [in] polynomial  Polynomial value used to compute the CRC value
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_gfsk_crc_params( const ral_t* radio, const uint16_t seed, const uint16_t polynomial )
+{
+    return radio->driver.set_gfsk_crc_params( radio->context, seed, polynomial );
+}
+
+/**
+ * @brief Configure the seed used to compute the CRC for FLRC packets
+ *
+ * @param [in] radio       Pointer to radio data structure
+ * @param [in] seed        Seed value used to compute the CRC value
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_flrc_crc_params( const ral_t* radio, const uint32_t seed )
+{
+    return radio->driver.set_flrc_crc_params( radio->context, seed );
+}
+
+/**
+ * @brief Configure the whitening seed used in GFSK packet
+ *
+ * @param [in] radio  Pointer to radio data structure
+ * @param [in] seed   Seed value used in data whitening
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_set_gfsk_whitening_seed( const ral_t* radio, const uint16_t seed )
+{
+    return radio->driver.set_gfsk_whitening_seed( radio->context, seed );
+}
+
+/**
+ * @brief Get TX power consumption, in micro ampere
+ *
+ * @param [in] radio                   Pointer to radio data structure
+ * @param [in] output_pwr_in_dbm       System output power in dBm
+ * @param [in] rf_freq_in_hz           RF frequency in Hertz
+ * @param [out] pwr_consumption_in_ua  The power consumption in micro ampere
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_get_tx_consumption_in_ua( const ral_t* radio, const int8_t output_pwr_in_dbm,
+                                                         const uint32_t rf_freq_in_hz, uint32_t* pwr_consumption_in_ua )
+{
+    return radio->driver.get_tx_consumption_in_ua( radio->context, output_pwr_in_dbm, rf_freq_in_hz,
+                                                   pwr_consumption_in_ua );
+}
+
+/**
+ * @brief Get GFSK RX power consumption, in micro ampere
+ *
+ * @param [in] radio                   Pointer to radio data structure
+ * @param [in] br_in_bps               Bitrate in bit-per-second
+ * @param [in] bw_dsb_in_hz            Bandwidth in Hz (Dual Side Band)
+ * @param [in] rx_boosted              Rx boosted option
+ * @param [out] pwr_consumption_in_ua  The power consumption in micro ampere
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_get_gfsk_rx_consumption_in_ua( const ral_t* radio, const uint32_t br_in_bps,
+                                                              const uint32_t bw_dsb_in_hz, const bool rx_boosted,
+                                                              uint32_t* pwr_consumption_in_ua )
+{
+    return radio->driver.get_gfsk_rx_consumption_in_ua( radio->context, br_in_bps, bw_dsb_in_hz, rx_boosted,
+                                                        pwr_consumption_in_ua );
+}
+
+/**
+ * @brief Get LoRa RX power consumption, in micro ampere
+ *
+ * @param [in] radio                   Pointer to radio data structure
+ * @param [in] bw                      LoRa bandwidth
+ * @param [in] rx_boosted              Rx boosted option
+ * @param [out] pwr_consumption_in_ua  The power consumption in micro ampere
+ *
+ * @returns Operation status
+ */
+static inline ral_status_t ral_get_lora_rx_consumption_in_ua( const ral_t* radio, const ral_lora_bw_t bw,
+                                                              const bool rx_boosted, uint32_t* pwr_consumption_in_ua )
+{
+    return radio->driver.get_lora_rx_consumption_in_ua( radio->context, bw, rx_boosted, pwr_consumption_in_ua );
+}
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // __RAL_H__
+#endif  // RAL_H__
 
 /* --- EOF ------------------------------------------------------------------ */

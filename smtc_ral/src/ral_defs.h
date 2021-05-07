@@ -1,7 +1,7 @@
 /**
  * @file      ral_defs.h
  *
- * @brief     Radio Abstraction Layer (RAL) API types definition
+ * @brief     Radio abstraction layer types definition
  *
  * Revised BSD License
  * Copyright Semtech Corporation 2020. All rights reserved.
@@ -29,8 +29,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __RAL_DEFS_H__
-#define __RAL_DEFS_H__
+#ifndef RAL_DEFS_H__
+#define RAL_DEFS_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,59 +54,35 @@ extern "C" {
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
+/**
+ * @brief Reserved value used to configure a reception in continuous mode
+ */
+#define RAL_RX_TIMEOUT_CONTINUOUS_MODE 0xFFFFFFFF
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
  */
 
-typedef enum ral_radio_types_e
+typedef enum ral_standby_cfg_e
 {
-    RAL_RADIO_UNKNOWN,
-    RAL_RADIO_SX1272,
-    RAL_RADIO_SX1276,
-    RAL_RADIO_SX126X,
-    RAL_RADIO_SX1280,
-} ral_radio_types_t;
+    RAL_STANDBY_CFG_RC,
+    RAL_STANDBY_CFG_XOSC,
+} ral_standby_cfg_t;
 
-typedef enum ral_tcxo_ctrl_modes_e
+typedef enum ral_fallback_modes_e
 {
-    RAL_TCXO_NONE,           //! No TCXO connected
-    RAL_TCXO_CTRL_RADIO,     //! TCXO fully controlled by the radio chip
-    RAL_TCXO_CTRL_HOST_EXT,  //! TCXO fully controlled by the host
-} ral_tcxo_ctrl_modes_t;
-
-typedef enum ral_tcxo_ctrl_voltages_e
-{
-    RAL_TCXO_CTRL_1_6V,
-    RAL_TCXO_CTRL_1_7V,
-    RAL_TCXO_CTRL_1_8V,
-    RAL_TCXO_CTRL_2_2V,
-    RAL_TCXO_CTRL_2_4V,
-    RAL_TCXO_CTRL_2_7V,
-    RAL_TCXO_CTRL_3_0V,
-    RAL_TCXO_CTRL_3_3V,
-} ral_tcxo_ctrl_voltages_t;
-
-typedef struct ral_tcxo_conf_s
-{
-    ral_tcxo_ctrl_modes_t    tcxo_ctrl_mode;
-    ral_tcxo_ctrl_voltages_t tcxo_ctrl_voltage;
-    uint16_t                 tcxo_startup_time_ms;
-} ral_tcxo_cfg_t;
-
-typedef struct ral_s
-{
-    const void*             context;
-    const ral_radio_types_t radio_type;
-    const ral_tcxo_cfg_t    tcxo_cfg;
-} ral_t;
+    RAL_FALLBACK_STDBY_RC,
+    RAL_FALLBACK_STDBY_XOSC,
+    RAL_FALLBACK_FS,
+} ral_fallback_modes_t;
 
 /**
  * API return status
  */
 typedef enum ral_status_e
 {
-    RAL_STATUS_OK = 0,
+    RAL_STATUS_OK,
     RAL_STATUS_UNSUPPORTED_FEATURE,
     RAL_STATUS_UNKNOWN_VALUE,
     RAL_STATUS_ERROR,
@@ -119,100 +95,64 @@ typedef enum ral_gfsk_crc_type_e
     RAL_GFSK_CRC_2_BYTES,
     RAL_GFSK_CRC_1_BYTE_INV,
     RAL_GFSK_CRC_2_BYTES_INV,
+    RAL_GFSK_CRC_3_BYTES,
 } ral_gfsk_crc_type_t;
 
-typedef enum ral_gfsk_mod_shape_e
+typedef enum ral_gfsk_pulse_shape_e
 {
-    RAL_GFSK_MOD_SHAPE_OFF,
-    RAL_GFSK_MOD_SHAPE_BT_03,
-    RAL_GFSK_MOD_SHAPE_BT_05,
-    RAL_GFSK_MOD_SHAPE_BT_07,
-    RAL_GFSK_MOD_SHAPE_BT_1,
-} ral_gfsk_mod_shape_t;
-
-typedef struct ral_params_gfsk_s
-{
-    uint32_t             freq_in_hz;
-    uint32_t             br_in_bps;
-    uint16_t             pbl_len_in_bytes;
-    uint8_t              sync_word_len_in_bytes;
-    const uint8_t*       sync_word;
-    bool                 pld_is_fix;
-    uint8_t              pld_len_in_bytes;
-    ral_gfsk_crc_type_t  crc_type;
-    bool                 dc_free_is_on;
-    uint16_t             crc_seed;
-    uint16_t             crc_polynomial;
-    uint16_t             whitening_seed;
-    ral_gfsk_mod_shape_t pulse_shape;
-    uint32_t             bw_ssb_in_hz;  //! Rx parameters
-    int8_t               pwr_in_dbm;    //! Tx parameters
-    uint32_t             fdev_in_hz;    //! Tx parameters
-} ral_params_gfsk_t;
+    RAL_GFSK_PULSE_SHAPE_OFF,
+    RAL_GFSK_PULSE_SHAPE_BT_03,
+    RAL_GFSK_PULSE_SHAPE_BT_05,
+    RAL_GFSK_PULSE_SHAPE_BT_07,
+    RAL_GFSK_PULSE_SHAPE_BT_1,
+} ral_gfsk_pulse_shape_t;
 
 typedef enum ral_lora_sf_e
 {
-    RAL_LORA_SF5 = 5,  // SX126x, SX1280
-    RAL_LORA_SF6,      // SX126x, SX1280
-    RAL_LORA_SF7,      // All radios
-    RAL_LORA_SF8,      // All radios
-    RAL_LORA_SF9,      // All radios
-    RAL_LORA_SF10,     // All radios
-    RAL_LORA_SF11,     // All radios
-    RAL_LORA_SF12,     // All radios
+    RAL_LORA_SF5 = 5,
+    RAL_LORA_SF6,
+    RAL_LORA_SF7,
+    RAL_LORA_SF8,
+    RAL_LORA_SF9,
+    RAL_LORA_SF10,
+    RAL_LORA_SF11,
+    RAL_LORA_SF12,
 } ral_lora_sf_t;
 
 typedef enum ral_lora_bw_e
 {
-    RAL_LORA_BW_007_KHZ = 0,  // SX126x, SX1276 only
-    RAL_LORA_BW_010_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_015_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_020_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_031_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_041_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_062_KHZ,      // SX126x, SX1276 only
-    RAL_LORA_BW_125_KHZ,      // All except SX1280
-    RAL_LORA_BW_200_KHZ,      // SX1280 only
-    RAL_LORA_BW_250_KHZ,      // All except SX1280
-    RAL_LORA_BW_400_KHZ,      // SX1280 only
-    RAL_LORA_BW_500_KHZ,      // All except SX1280
-    RAL_LORA_BW_800_KHZ,      // SX1280 only
-    RAL_LORA_BW_1600_KHZ,     // SX1280 only
+    RAL_LORA_BW_007_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_010_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_015_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_020_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_031_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_041_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_062_KHZ,   // All except SX128X and SX1272
+    RAL_LORA_BW_125_KHZ,   // All except SX128X
+    RAL_LORA_BW_200_KHZ,   // SX128X only
+    RAL_LORA_BW_250_KHZ,   // All except SX128X
+    RAL_LORA_BW_400_KHZ,   // SX128X only
+    RAL_LORA_BW_500_KHZ,   // All except SX128X
+    RAL_LORA_BW_800_KHZ,   // SX128X only
+    RAL_LORA_BW_1600_KHZ,  // SX128X only
 } ral_lora_bw_t;
 
 typedef enum ral_lora_cr_e
 {
-    RAL_LORA_CR_4_5 = 0,
+    RAL_LORA_CR_4_5 = 1,
     RAL_LORA_CR_4_6,
     RAL_LORA_CR_4_7,
     RAL_LORA_CR_4_8,
-    RAL_LORA_CR_LI_4_5,  // SX1280 only
-    RAL_LORA_CR_LI_4_6,  // SX1280 only
-    // RAL_LORA_CR_LI_4_7,  // No radio support available
-    RAL_LORA_CR_LI_4_8,  // SX1280 only
+    RAL_LORA_CR_LI_4_5,
+    RAL_LORA_CR_LI_4_6,
+    RAL_LORA_CR_LI_4_8,
 } ral_lora_cr_t;
-
-typedef struct ral_params_lora_s
-{
-    uint32_t      freq_in_hz;
-    ral_lora_sf_t sf;
-    ral_lora_bw_t bw;
-    ral_lora_cr_t cr;
-    uint16_t      pbl_len_in_symb;
-    uint8_t       sync_word;
-    bool          pld_is_fix;
-    uint8_t       pld_len_in_bytes;
-    bool          crc_is_on;
-    bool          invert_iq_is_on;
-    uint8_t       symb_nb_timeout;  //! Rx only parameters
-    int8_t        pwr_in_dbm;       //! Tx only parameters
-} ral_params_lora_t;
 
 typedef enum ral_flrc_cr_e
 {
     RAL_FLRC_CR_1_2 = 0,
     RAL_FLRC_CR_3_4,
-    RAL_FLRC_CR_1_0,
+    RAL_FLRC_CR_1_1,
 } ral_flrc_cr_t;
 
 typedef enum ral_flrc_crc_type_e
@@ -223,94 +163,182 @@ typedef enum ral_flrc_crc_type_e
     RAL_FLRC_CRC_4_BYTES
 } ral_flrc_crc_type_t;
 
-typedef enum ral_flrc_mod_shape_e
+typedef enum ral_flrc_pulse_shape_e
 {
-    RAL_FLRC_MOD_SHAPE_OFF,
-    RAL_FLRC_MOD_SHAPE_BT_05,
-    RAL_FLRC_MOD_SHAPE_BT_1,
-} ral_flrc_mod_shape_t;
+    RAL_FLRC_PULSE_SHAPE_OFF,
+    RAL_FLRC_PULSE_SHAPE_BT_05,
+    RAL_FLRC_PULSE_SHAPE_BT_1,
+} ral_flrc_pulse_shape_t;
 
-typedef struct ral_params_flrc_s
+/**
+ * @brief GFSK preamble length Rx detection size enumeration definition
+ */
+typedef enum ral_gfsk_preamble_detector_e
 {
-    uint32_t             freq_in_hz;
-    uint32_t             br_in_bps;
-    ral_flrc_cr_t        cr;
-    uint16_t             pbl_len_in_bytes;
-    bool                 sync_word_is_on;
-    const uint8_t*       sync_word;
-    bool                 pld_is_fix;
-    uint8_t              pld_len_in_bytes;
-    ral_flrc_crc_type_t  crc_type;
-    uint32_t             crc_seed;
-    ral_flrc_mod_shape_t mod_shape;
-    uint32_t             bw_ssb_in_hz;  //! Rx only parameters
-    int8_t               pwr_in_dbm;    //! Tx only parameters
-} ral_params_flrc_t;
+    RAL_GFSK_PREAMBLE_DETECTOR_OFF,
+    RAL_GFSK_PREAMBLE_DETECTOR_MIN_8BITS,
+    RAL_GFSK_PREAMBLE_DETECTOR_MIN_16BITS,
+    RAL_GFSK_PREAMBLE_DETECTOR_MIN_24BITS,
+    RAL_GFSK_PREAMBLE_DETECTOR_MIN_32BITS,
+} ral_gfsk_preamble_detector_t;
 
-typedef struct ral_params_lora_e_s
+/**
+ * @brief LoRa packet length enumeration definition
+ */
+typedef enum ral_lora_pkt_len_modes_e
 {
-    void* todo;
-} ral_params_lora_e_t;
-
-typedef struct ral_params_bpsk_s
-{
-    void* todo;
-} ral_params_bpsk_t;
+    RAL_LORA_PKT_EXPLICIT,  //!< LoRa header included in the packet
+    RAL_LORA_PKT_IMPLICIT,  //!< LoRa header not included in the packet
+} ral_lora_pkt_len_modes_t;
 
 typedef enum ral_pkt_types_e
 {
-    RAL_PKT_TYPE_GFSK   = 0x00,
-    RAL_PKT_TYPE_LORA   = 0x01,
-    RAL_PKT_TYPE_FLRC   = 0x02,
-    RAL_PKT_TYPE_LORA_E = 0x03,
-    RAL_PKT_TYPE_BPSK   = 0x04,
-    RAL_PKT_TYPE_NONE   = 0x0F,
+    RAL_PKT_TYPE_GFSK,
+    RAL_PKT_TYPE_LORA,
+    RAL_PKT_TYPE_FLRC,
 } ral_pkt_type_t;
 
-typedef struct ral_rx_pkt_status_gfsk_s
+/**
+ * @brief GFSK address filtering configuration enumeration definition
+ */
+typedef enum ral_gfsk_address_filtering_e
 {
-    uint8_t rx_status;
-    int16_t rssi_sync_in_dbm;
-    int16_t rssi_avg_in_dbm;
-} ral_rx_pkt_status_gfsk_t;
+    RAL_GFSK_ADDRESS_FILTERING_DISABLE,
+    RAL_GFSK_ADDRESS_FILTERING_NODE_ADDRESS,
+    RAL_GFSK_ADDRESS_FILTERING_NODE_AND_BROADCAST_ADDRESSES,
+} ral_gfsk_address_filtering_t;
 
-typedef struct ral_rx_pkt_status_lora_s
+/*!
+ * \brief GFSK data whitening configurations
+ */
+typedef enum ral_gfsk_dc_free_e
+{
+    RAL_GFSK_DC_FREE_OFF,        //!< GFSK data whitening deactivated
+    RAL_GFSK_DC_FREE_WHITENING,  //!< GFSK data whitening enabled
+} ral_gfsk_dc_free_t;
+
+enum ral_rx_status_gfsk_e
+{
+    RAL_RX_STATUS_PKT_SENT     = ( 1 << 0 ),
+    RAL_RX_STATUS_PKT_RECEIVED = ( 1 << 1 ),
+    RAL_RX_STATUS_ABORT_ERROR  = ( 1 << 2 ),
+    RAL_RX_STATUS_LENGTH_ERROR = ( 1 << 3 ),
+    RAL_RX_STATUS_CRC_ERROR    = ( 1 << 4 ),
+    RAL_RX_STATUS_ADDR_ERROR   = ( 1 << 5 ),
+};
+
+/*!
+ * \brief GFSK Header Type configurations
+ *
+ * This parameter indicates whether or not the payload length is sent and read
+ * over the air.
+ *
+ * If the payload length is known beforehand by both transmitter and receiver,
+ * therefore there is no need to send it over the air. Otherwise, setting this
+ * parameter to LR1110_RADIO_GFSK_PKT_VAR_LEN will make the modem to
+ * automatically prepand a byte containing the payload length to the the payload
+ * on transmitter side. On receiver side, this first byte is read to set the
+ * payload length to read.
+ *
+ * This configuration is only available for GFSK packet types.
+ */
+typedef enum ral_gfsk_pkt_len_modes_s
+{
+    RAL_GFSK_PKT_FIX_LEN,  //!< Payload length is not sent/read over the air
+    RAL_GFSK_PKT_VAR_LEN,  //!< Payload length is sent/read over the air
+} ral_gfsk_pkt_len_modes_t;
+
+typedef uint16_t ral_rx_status_gfsk_t;
+
+typedef struct ral_gfsk_rx_pkt_status_s
+{
+    ral_rx_status_gfsk_t rx_status;
+    int16_t              rssi_sync_in_dbm;
+    int16_t              rssi_avg_in_dbm;
+} ral_gfsk_rx_pkt_status_t;
+
+typedef struct ral_lora_rx_pkt_status_s
 {
     int16_t rssi_pkt_in_dbm;
     int16_t snr_pkt_in_db;
-    int16_t signal_rssi_pkt_in_db;  // Last packet received LoRa signal RSSI
-                                    // power in dB estimation
-                                    // (done after despreading)
-} ral_rx_pkt_status_lora_t;
+    int16_t signal_rssi_pkt_in_dbm;  // Last packet received LoRa signal RSSI power in dB (after despreading)
+} ral_lora_rx_pkt_status_t;
 
-typedef struct ral_rx_pkt_status_flrc_s
+typedef struct ral_flrc_rx_pkt_status_s
 {
-    int16_t rssi_in_dbm;
-} ral_rx_pkt_status_flrc_t;
+    int16_t rssi_sync_in_dbm;
+} ral_flrc_rx_pkt_status_t;
 
 /*!
- *  Represents the number of symbs to be used for channel activity
- * detection operation
+ *  Represents the number of symbs to be used for channel activity detection operation
  */
 typedef enum ral_lora_cad_symbs_e
 {
-    RAL_LORA_CAD_01_SYMB = 0x00,
-    RAL_LORA_CAD_02_SYMB = 0x01,
-    RAL_LORA_CAD_04_SYMB = 0x02,
-    RAL_LORA_CAD_08_SYMB = 0x03,
-    RAL_LORA_CAD_16_SYMB = 0x04,
+    RAL_LORA_CAD_01_SYMB,
+    RAL_LORA_CAD_02_SYMB,
+    RAL_LORA_CAD_04_SYMB,
+    RAL_LORA_CAD_08_SYMB,
+    RAL_LORA_CAD_16_SYMB,
 } ral_lora_cad_symbs_t;
 
 /*!
- *  Represents the Channel Activity Detection actions after the CAD
- * operation is finished
+ *  Represents the Channel Activity Detection actions after the CAD operation is finished
  */
 typedef enum ral_lora_cad_exit_modes_e
 {
-    RAL_LORA_CAD_ONLY = 0x00,
-    RAL_LORA_CAD_RX   = 0x01,
-    RAL_LORA_CAD_LBT  = 0x10,
+    RAL_LORA_CAD_ONLY,
+    RAL_LORA_CAD_RX,
+    RAL_LORA_CAD_LBT,
 } ral_lora_cad_exit_modes_t;
+
+/**
+ * @brief GFSK modulation parameters structure definition
+ */
+typedef struct ral_gfsk_mod_params_s
+{
+    uint32_t               br_in_bps;
+    uint32_t               fdev_in_hz;
+    uint32_t               bw_dsb_in_hz;
+    ral_gfsk_pulse_shape_t pulse_shape;
+} ral_gfsk_mod_params_t;
+
+/**
+ * @brief GFSK packet parameters structure definition
+ */
+typedef struct ral_gfsk_pkt_params_s
+{
+    uint16_t                     preamble_len_in_bits;   //!< GFSK Preamble length in bits
+    ral_gfsk_preamble_detector_t preamble_detector;      //!< GFSK Preamble detection length
+    uint8_t                      sync_word_len_in_bits;  //!< GFSK Sync word length in bits
+    ral_gfsk_address_filtering_t address_filtering;      //!< GFSK Address filtering configuration
+    ral_gfsk_pkt_len_modes_t     header_type;            //!< GFSK Header type
+    uint8_t                      pld_len_in_bytes;       //!< GFSK Payload length in bytes
+    ral_gfsk_crc_type_t          crc_type;               //!< GFSK CRC type configuration
+    ral_gfsk_dc_free_t           dc_free;                //!< GFSK Whitening configuration
+} ral_gfsk_pkt_params_t;
+
+/**
+ * @brief LoRa modulation parameters structure definition
+ */
+typedef struct ral_lora_mod_params_s
+{
+    ral_lora_sf_t sf;    //!< LoRa Spreading Factor
+    ral_lora_bw_t bw;    //!< LoRa Bandwidth
+    ral_lora_cr_t cr;    //!< LoRa Coding Rate
+    uint8_t       ldro;  //!< LoRa Low DataRate Optimization configuration
+} ral_lora_mod_params_t;
+
+/**
+ * @brief LoRa packet parameters structure definition
+ */
+typedef struct ral_lora_pkt_params_s
+{
+    uint16_t                 preamble_len_in_symb;  //!< LoRa preamble length in symbols
+    ral_lora_pkt_len_modes_t header_type;           //!< LoRa header type
+    uint8_t                  pld_len_in_bytes;      //!< LoRa payload length in bytes
+    bool                     crc_is_on;             //!< LoRa CRC activation
+    bool                     invert_iq_is_on;       //!< LoRa IQ polarity setup
+} ral_lora_pkt_params_t;
 
 /*!
  * Defines \ref ral_set_cad_params function parameters.
@@ -324,22 +352,46 @@ typedef struct ral_lora_cad_param_s
     uint32_t                  cad_timeout_in_ms;
 } ral_lora_cad_params_t;
 
+/**
+ * @brief FLRC modulation parameters structure definition
+ */
+typedef struct ral_flrc_mod_params_s
+{
+    uint32_t               br_in_bps;
+    uint32_t               bw_dsb_in_hz;
+    ral_flrc_cr_t          cr;
+    ral_flrc_pulse_shape_t pulse_shape;
+} ral_flrc_mod_params_t;
+
+/**
+ * @brief FLRC packet parameters structure definition
+ */
+typedef struct ral_flrc_pkt_params_s
+{
+    uint16_t            preamble_len_in_bits;
+    bool                sync_word_is_on;
+    bool                pld_is_fix;
+    uint8_t             pld_len_in_bytes;
+    ral_flrc_crc_type_t crc_type;
+} ral_flrc_pkt_params_t;
+
 /*
  * IRQ definitions
  */
 enum ral_irq_e
 {
-    RAL_IRQ_NONE         = ( 0 << 0 ),
-    RAL_IRQ_TX_DONE      = ( 1 << 1 ),
-    RAL_IRQ_RX_DONE      = ( 1 << 2 ),
-    RAL_IRQ_RX_TIMEOUT   = ( 1 << 3 ),
-    RAL_IRQ_RX_HDR_OK    = ( 1 << 4 ),
-    RAL_IRQ_RX_HDR_ERROR = ( 1 << 5 ),
-    RAL_IRQ_RX_CRC_ERROR = ( 1 << 6 ),
-    RAL_IRQ_CAD_DONE     = ( 1 << 7 ),
-    RAL_IRQ_CAD_OK       = ( 1 << 8 ),
-    RAL_IRQ_ALL = RAL_IRQ_TX_DONE | RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_HDR_OK | RAL_IRQ_RX_HDR_ERROR |
-                  RAL_IRQ_RX_CRC_ERROR | RAL_IRQ_CAD_DONE | RAL_IRQ_CAD_OK,
+    RAL_IRQ_NONE                 = ( 0 << 0 ),
+    RAL_IRQ_TX_DONE              = ( 1 << 1 ),
+    RAL_IRQ_RX_DONE              = ( 1 << 2 ),
+    RAL_IRQ_RX_TIMEOUT           = ( 1 << 3 ),
+    RAL_IRQ_RX_PREAMBLE_DETECTED = ( 1 << 4 ),
+    RAL_IRQ_RX_HDR_OK            = ( 1 << 5 ),
+    RAL_IRQ_RX_HDR_ERROR         = ( 1 << 6 ),
+    RAL_IRQ_RX_CRC_ERROR         = ( 1 << 7 ),
+    RAL_IRQ_CAD_DONE             = ( 1 << 8 ),
+    RAL_IRQ_CAD_OK               = ( 1 << 9 ),
+    RAL_IRQ_ALL = RAL_IRQ_TX_DONE | RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_PREAMBLE_DETECTED |
+                  RAL_IRQ_RX_HDR_OK | RAL_IRQ_RX_HDR_ERROR | RAL_IRQ_RX_CRC_ERROR | RAL_IRQ_CAD_DONE | RAL_IRQ_CAD_OK,
 };
 
 typedef uint16_t ral_irq_t;
@@ -351,10 +403,6 @@ typedef uint16_t ral_irq_t;
 
 static inline uint8_t ral_compute_lora_ldro( const ral_lora_sf_t sf, const ral_lora_bw_t bw )
 {
-    // Since the SX1280 chip manages the LDRO configuration by itself, all
-    // bandwidth related to it are not handled in the following switch
-    // implementation.
-
     switch( bw )
     {
     case RAL_LORA_BW_500_KHZ:
@@ -368,6 +416,9 @@ static inline uint8_t ral_compute_lora_ldro( const ral_lora_sf_t sf, const ral_l
         {
             return 0;
         }
+    case RAL_LORA_BW_800_KHZ:
+    case RAL_LORA_BW_400_KHZ:
+    case RAL_LORA_BW_200_KHZ:
     case RAL_LORA_BW_125_KHZ:
         if( ( sf == RAL_LORA_SF12 ) || ( sf == RAL_LORA_SF11 ) )
         {
@@ -410,6 +461,6 @@ static inline uint8_t ral_compute_lora_ldro( const ral_lora_sf_t sf, const ral_l
 }
 #endif
 
-#endif  // __RAL_DEFS_H__
+#endif  // RAL_DEFS_H__
 
 /* --- EOF ------------------------------------------------------------------ */

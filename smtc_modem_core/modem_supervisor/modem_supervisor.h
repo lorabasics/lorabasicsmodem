@@ -41,6 +41,10 @@ extern "C" {
  * --- DEPENDENCIES ------------------------------------------------------------
  */
 #include "radio_planner.h"
+#include "alc_sync.h"
+#include "stream.h"
+#include "file_upload.h"
+#include "lr1_stack_mac_layer.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -52,6 +56,12 @@ extern "C" {
 #define MODEM_MAX_TIME 0x1FFFFF
 #define CALL_LR1MAC_PERIOD_MS 400
 #define MODEM_MAX_ALARM_S 0x7FFFFFFF
+
+#define ALCSYNC_NB_REQ_PERIOD1 3
+#define ALCSYNC_PERIOD1_RETRY 128
+#define ALCSYNC_NB_REQ_PERIOD2 6
+#define ALCSYNC_PERIOD2_RETRY 14400  // 4 hours
+#define ALCSYNC_PERIOD_RETRY 129600  // 36 hours
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
@@ -65,9 +75,9 @@ typedef enum
 {
     SEND_TASK,          //!< task managed by the application such as sensor uplink for example
     SEND_AT_TIME_TASK,  //!< not used
-    JOIN_TASK,          //!< task mange by the modem itself to join a network
-    DM_TASK,            //!< task mange by the modem itself to report periodically status
-    DM_TASK_NOW,        //!< task mange by the modem when requested by the host or the cloud to report status
+    JOIN_TASK,          //!< task managed by the modem itself to join a network
+    DM_TASK,            //!< task managed by the modem itself to report periodically status
+    DM_TASK_NOW,        //!< task managed by the modem when requested by the host or the cloud to report status
     FILE_UPLOAD_TASK,  //!< task initiate by the application layer but manage by the modem itself to transfer "big file"
     IDLE_TASK,         //!< mean no more active task schedule
     MUTE_TASK,         //!< task managed by the modem to un-mute the modem
@@ -75,8 +85,11 @@ typedef enum
     STREAM_TASK,  //!< task initiated by the application layer, but managed by the modem itself to transfer long streams
     ALC_SYNC_TIME_REQ_TASK,  //!< task managed by the modem to launch Application Layer Clock Synchronisation
     ALC_SYNC_ANS_TASK,       //!< task managed by the modem to launch Application Layer Clock Synchronisation answer
+    FRAG_TASK,               //!< task managed by the modem to launch Fragmented Data Block uplink
+    USER_TASK,               //!< task manage by the modem to launch a user callback (use also for wifi and gnss tasks)
+    DM_ALM_DBG_ANS,          //!< task managed by the modem to launch almanac debug answer
+    CRASH_LOG_TASK,          // !< task managed by the modem to launch crash log
     NUMBER_OF_TASKS          //!< number of tasks
-
 } task_id_t;
 
 /*!
@@ -101,6 +114,12 @@ typedef enum eTask_valid
     TASK_VALID,     //!< Task valid
     TASK_NOT_VALID  //!< Task not valid
 } eTask_valid_t;
+
+typedef enum e_tx_mode
+{
+    TX_UNCONFIRMED = 0x00,  //!< Tx packet in Unconfirmed mode
+    TX_CONFIRMED   = 0x01   //!< Tx packet in Confirmed mode
+} e_tx_mode_t;
 
 /*!
  * \typedef smodem_task
@@ -130,6 +149,12 @@ typedef struct stask_manager
 
 } stask_manager;
 
+typedef struct smtc_modem_services_s
+{
+    alc_sync_ctx_t alc_sync_ctx;
+    rose_t         stream_ROSE_ctx;
+    file_upload_t  file_upload_ctx;
+} smtc_modem_services_t;
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
@@ -142,8 +167,14 @@ typedef struct stask_manager
  * \param [in]  rp*         - pointer to the radio planner
  * \retval None
  */
-void modem_supervisor_init( void ( *callback )( void ), radio_planner_t* rp );
+void modem_supervisor_init( void ( *callback )( void ), radio_planner_t* rp,
+                            smtc_modem_services_t* smtc_modem_services_ctx );
 
+/*!
+ * \brief modem_supervisor_init_task
+ * \retval
+ */
+void modem_supervisor_init_task( void );
 /*!
  * \brief Supervisor Engine
  * \retval return the maximum delay in ms at which time the engine MUST be recalled
@@ -155,6 +186,8 @@ uint32_t modem_supervisor_engine( void );
  * \retval none
  */
 void init_task( void );
+
+eTask_priority modem_supervisor_get_task_priority( task_id_t id );
 
 /*!
  * \brief   Remove a task in supervisor
@@ -171,6 +204,16 @@ eTask_valid_t modem_supervisor_remove_task( task_id_t id );
  */
 eTask_valid_t modem_supervisor_add_task( smodem_task* task );
 
+/**
+ * @brief
+ *
+ * @param data
+ * @param data_length
+ * @param metadata
+ * @return uint8_t
+ */
+
+uint8_t modem_supervisor_update_downlink_frame( uint8_t* data, uint8_t data_length, lr1mac_down_metadata_t* metadata );
 #ifdef __cplusplus
 }
 #endif

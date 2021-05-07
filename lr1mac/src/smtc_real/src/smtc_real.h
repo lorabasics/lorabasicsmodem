@@ -1,4 +1,4 @@
-/*!
+/**
  * \file      smtc_real.h
  *
  * \brief     Region Abstraction Layer (REAL) API definition
@@ -28,334 +28,548 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef __REAL_H__
-#define __REAL_H__
-
-#include <stdint.h>
-#include <stdbool.h>
-
-#include "smtc_real_defs.h"
-#include "lr1_stack_mac_layer.h"
-#include "lr1mac_defs.h"
+#ifndef REAL_H
+#define REAL_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "lr1mac_defs.h"
+#include "smtc_real_defs.h"
+#include "lr1_stack_mac_layer.h"
+
 /*
  * ============================================================================
  * API definitions
  * ============================================================================
  */
-/*!
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_config( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
 void smtc_real_init( lr1_stack_mac_t* lr1_mac );
-/*!
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void smtc_real_dr_distribution_set( lr1_stack_mac_t* lr1_mac, uint8_t adrMode );
-/*!
+void smtc_real_init_session( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-status_lorawan_t smtc_real_memory_load( lr1_stack_mac_t* lr1_mac );
-/*!
+void smtc_real_set_dr_distribution( lr1_stack_mac_t* lr1_mac, uint8_t adr_mode );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] status_lorawan_t
+ */
+status_lorawan_t smtc_real_get_next_dr( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] status_lorawan_t
+ */
+uint16_t smtc_real_mask_tx_dr_channel( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] status_lorawan_t
+ */
+uint16_t smtc_real_mask_tx_dr_channel_up_dwell_time_check( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void smtc_real_bad_crc_memory_set( lr1_stack_mac_t* lr1_mac );
-/*!
+void smtc_real_update_cflist( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void smtc_real_next_dr_get( lr1_stack_mac_t* lr1_mac );
-/*!
+uint8_t smtc_real_get_number_of_chmask_in_cflist( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-void smtc_real_memory_save( lr1_stack_mac_t* lr1_mac );
-/*!
+status_lorawan_t smtc_real_get_next_channel( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint8_t smtc_real_max_payload_size_get( lr1_stack_mac_t* lr1_mac, uint8_t dr );
-/*!
+status_lorawan_t smtc_real_get_join_next_channel( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_rx_config( lr1_stack_mac_t* lr1_mac, rx_win_type_t type );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_power( lr1_stack_mac_t* lr1_mac, uint8_t power_cmd );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_channel_mask( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_init_channel_mask( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_init_join_snapshot_channel_mask( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_init_after_join_snapshot_channel_mask( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_channel_t smtc_real_build_channel_mask( lr1_stack_mac_t* lr1_mac, uint8_t ch_mask_cntl, uint16_t ch_mask );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_decrement_dr_simulation( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_decrement_dr( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_enable_all_channels_with_valid_freq( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_rx1_dr_offset_valid( lr1_stack_mac_t* lr1_mac, uint8_t rx1_dr_offset );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_rx_dr_valid( lr1_stack_mac_t* lr1_mac, uint8_t dr );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_tx_dr_valid( lr1_stack_mac_t* lr1_mac, uint8_t dr );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_tx_dr_acceptable( lr1_stack_mac_t* lr1_mac, uint8_t dr );  // for link adr cmd
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_tx_frequency_valid( lr1_stack_mac_t* lr1_mac, uint32_t frequency );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_channel_index_valid( lr1_stack_mac_t* lr1_mac, uint8_t channel_index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_is_payload_size_valid( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t size,
+                                                  uint8_t dwell_time_enabled );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_tx_frequency_channel( lr1_stack_mac_t* lr1_mac, uint32_t tx_freq, uint8_t index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+status_lorawan_t smtc_real_set_rx1_frequency_channel( lr1_stack_mac_t* lr1_mac, uint32_t rx_freq, uint8_t index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_channel_dr( lr1_stack_mac_t* lr1_mac, uint8_t channel_index, uint8_t dr_min, uint8_t dr_max );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+void smtc_real_set_channel_enabled( lr1_stack_mac_t* lr1_mac, uint8_t enable, uint8_t channel_index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint32_t smtc_real_get_tx_channel_frequency( lr1_stack_mac_t* lr1_mac, uint8_t index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint32_t smtc_real_get_rx1_channel_frequency( lr1_stack_mac_t* lr1_mac, uint8_t index );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_min_tx_channel_dr( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_max_tx_channel_dr( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+uint8_t smtc_real_get_preamble_len( const lr1_stack_mac_t* lr1_mac, uint8_t sf );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+status_lorawan_t smtc_real_is_channel_mask_for_mobile_mode( const lr1_stack_mac_t* lr1_mac );
+
+/*************************************************************************/
+/*                      Const init in region                             */
+/*************************************************************************/
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+bool smtc_real_is_tx_param_setup_req_supported( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_rx1_join_delay( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_rx2_join_dr( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_frequency_factor( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+ral_lora_cr_t smtc_real_get_coding_rate( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_adr_ack_delay( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_adr_ack_limit( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * @brief
+ *
+ * @param lr1_mac
+ * @return uint8_t
+ */
+uint8_t smtc_real_get_public_sync_word( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * @brief
+ *
+ * @param lr1_mac
+ * @return uint8_t
+ */
+uint8_t smtc_real_get_private_sync_word( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_sync_word( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * @brief
+ *
+ * @param lr1_mac
+ * @param sync_word
+ */
+void smtc_real_set_sync_word( lr1_stack_mac_t* lr1_mac, uint8_t sync_word );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t* smtc_real_get_gfsk_sync_word( lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_max_payload_size( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t dwell_time_enabled );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ */
+uint8_t smtc_real_get_default_max_eirp( lr1_stack_mac_t* lr1_mac );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
 uint32_t smtc_real_decode_freq_from_buf( lr1_stack_mac_t* lr1_mac, uint8_t freq_buf[3] );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_cflist_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_next_channel_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_join_next_channel_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_rx_config_set( lr1_stack_mac_t* lr1_mac, rx_win_type_t type );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_power_set( lr1_stack_mac_t* lr1_mac, uint8_t power_cmd );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_default_max_eirp_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_channel_mask_set( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_channel_mask_init( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_join_snapshot_channel_mask_init( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_channel_t smtc_real_channel_mask_build( lr1_stack_mac_t* lr1_mac, uint8_t ChMaskCntl, uint16_t ChMask );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_dr_decrement( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_adr_ack_delay_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_adr_ack_limit_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_sync_word_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t* smtc_real_gfsk_sync_word_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_rx1_dr_offset( lr1_stack_mac_t* lr1_mac, uint8_t rx1_dr_offset );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_dr( lr1_stack_mac_t* lr1_mac, uint8_t dr );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_acceptable_dr( lr1_stack_mac_t* lr1_mac, uint8_t dr );  // for link adr cmd
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_tx_frequency( lr1_stack_mac_t* lr1_mac, uint32_t frequency );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_rx_frequency( lr1_stack_mac_t* lr1_mac, uint32_t frequency );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_tx_power( lr1_stack_mac_t* lr1_mac, uint8_t power );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_channel_index( lr1_stack_mac_t* lr1_mac, uint8_t channel_index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-status_lorawan_t smtc_real_is_valid_size( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t size );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_tx_frequency_channel_set( lr1_stack_mac_t* lr1_mac, uint32_t tx_freq, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_rx1_frequency_channel_set( lr1_stack_mac_t* lr1_mac, uint32_t rx_freq, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_min_dr_channel_set( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_max_dr_channel_set( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-void smtc_real_channel_enabled_set( lr1_stack_mac_t* lr1_mac, uint8_t enable, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint32_t smtc_real_tx_frequency_channel_get( lr1_stack_mac_t* lr1_mac, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint32_t smtc_real_rx1_frequency_channel_get( lr1_stack_mac_t* lr1_mac, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_min_dr_channel_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_max_dr_channel_get( lr1_stack_mac_t* lr1_mac );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_channel_enabled_get( lr1_stack_mac_t* lr1_mac, uint8_t index );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- */
-uint8_t smtc_real_rx1_join_delay_get( lr1_stack_mac_t* lr1_mac );
 
-/*!
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint8_t smtc_real_rx2_join_dr_get( lr1_stack_mac_t* lr1_mac );
-/*!
+status_lorawan_t smtc_real_is_rx_frequency_valid( lr1_stack_mac_t* lr1_mac, uint32_t frequency );
+
+/**
  * \brief
  * \remark
  * \param [IN]  none
  * \param [OUT] return
  */
-uint8_t smtc_real_frequency_factor_get( lr1_stack_mac_t* lr1_mac );
+status_lorawan_t smtc_real_is_tx_power_valid( lr1_stack_mac_t* lr1_mac, uint8_t power );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+bool smtc_real_is_dtc_supported( const lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+bool smtc_real_is_lbt_supported( const lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+uint32_t smtc_real_get_lbt_duration_ms( const lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+int16_t smtc_real_get_lbt_threshold_dbm( const lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+uint32_t smtc_real_get_lbt_bw_hz( const lr1_stack_mac_t* lr1_mac );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+void smtc_real_tx_dr_to_sf_bw( lr1_stack_mac_t* lr1_mac, uint8_t dr );
+
+/**
+ * \brief
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return
+ *
+ */
+void smtc_real_rx_dr_to_sf_bw( lr1_stack_mac_t* lr1_mac, uint8_t dr, uint8_t* sf, lr1mac_bandwidth_t* bw,
+                               modulation_type_t* modulation_type );
+
+/**
+ * @brief
+ *
+ * @param lr1_mac
+ * @param sf
+ * @param bw
+ * @return uint8_t
+ */
+uint8_t smtc_real_sf_bw_to_dr( lr1_stack_mac_t* lr1_mac, uint8_t sf, uint8_t bw );
 
 /*!
  * \brief
@@ -364,82 +578,23 @@ uint8_t smtc_real_frequency_factor_get( lr1_stack_mac_t* lr1_mac );
  * \param [OUT] return
  *
  */
-enum ral_lora_cr_e smtc_real_coding_rate_get( lr1_stack_mac_t* lr1_mac );
+int8_t smtc_real_clamp_output_power_eirp_vs_freq_and_dr( lr1_stack_mac_t* lr1_mac, int8_t tx_power,
+                                                         uint32_t tx_frequency, uint8_t datarate );
 
-/*!
- * \brief   get the join toa @sf5 in ms
- * \remark  used to compute join duty cycle in a fast way
- * \param [IN]  none
- * \param [OUT] return the toa in ms
+/**
+ * @brief
  *
+ * @param lr1_mac
+ * @param number_of_freq
+ * @param freq_list
+ * @param max_size
+ * @return uint8_t
  */
-uint32_t smtc_real_get_join_sf5_toa_in_ms( const lr1_stack_mac_t* lr1_mac );
-
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-void smtc_real_duty_cycle_enable_set( const lr1_stack_mac_t* lr1_mac, uint8_t enable );
-
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-void smtc_real_duty_cycle_sum( const lr1_stack_mac_t* lr1_mac, uint32_t freq_hz, uint32_t toa_ms );
-
-/*!
- * \brief   Decrement Time On Air
- * \remark  Must be called before check Duty Cycle available
- * \param [IN]  void
- * \return void
- */
-void smtc_real_duty_cycle_update( const lr1_stack_mac_t* lr1_mac );
-
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-status_lorawan_t smtc_real_duty_cycle_is_toa_accepted( const lr1_stack_mac_t* lr1_mac, uint32_t freq_hz,
-                                                       uint32_t toa_ms );
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-status_lorawan_t smtc_real_duty_cycle_is_channel_free( const lr1_stack_mac_t* lr1_mac, uint32_t freq_hz );
-
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-int32_t smtc_real_next_free_duty_cycle_ms_get( const lr1_stack_mac_t* lr1_mac );
-
-/*!
- * \brief
- * \remark
- * \param [IN]  none
- * \param [OUT] return
- *
- */
-uint8_t  smtc_real_preamble_get( const lr1_stack_mac_t* lr1_mac, uint8_t sf );
-
+uint8_t smtc_real_get_current_enabled_frequency_list( lr1_stack_mac_t* lr1_mac, uint8_t* number_of_freq,
+                                                      uint32_t* freq_list, uint8_t max_size );
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // __REAL_H__
+#endif  // REAL_H

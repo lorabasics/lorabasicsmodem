@@ -49,6 +49,23 @@ extern "C" {
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
 
+#if defined( _GNSS_SNIFF_ENABLE )
+#if defined( LR1110_MODEM )
+#elif defined( LR1110_TRANSCEIVER )
+
+#define GNSS_DM_MSG 2  // Message for the device management
+// frequency search window size
+#define FREQ_SEARCH_250HZ 250
+#define FREQ_SEARCH_500HZ 500
+#define FREQ_SEARCH_1KHZ 1000
+#define FREQ_SEARCH_2KHZ 2000
+
+#define SX126L_FIRMWARE_VERSION 0
+
+#else
+#error "GNSS functionality can't be used !"
+#endif
+#endif
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC TYPES ------------------------------------------------------------
@@ -70,6 +87,10 @@ typedef enum dm_cmd
     DM_SET_DM_INFO = 0x07,  //!< set list of default info fields
     DM_STREAM      = 0x08,  //!< set data stream parameters
     DM_ALC_SYNC    = 0x09,  //!< application layer clock sync data
+    DM_ALM_UPDATE  = 0x0A,  //!< almanac update, short, long, full updates
+    DM_ALM_DBG     = 0x0B,  //!< almanac debug
+    DM_SOLV_UPDATE = 0x0C,  //!< assistance position, xtal update
+    DM_ALM_FUPDATE = 0x0D,  //!< Force almanac update, short, long, full updates
     DM_CMD_MAX              //!< number of elements
 } e_dm_cmd_t;
 
@@ -171,16 +192,6 @@ typedef enum DM_CMD_LENGTH
 } e_dm_cmd_length_valid;
 
 /*!
- * \typedef modem_class_t
- * \brief   Modem class enumeration
- */
-typedef enum e_ModemClass
-{
-    MODEM_CLASS_A = 0x00,  //!< Modem class A
-    MODEM_CLASS_C = 0x01,  //!< Modem class C
-} modem_class_t;
-
-/*!
  * \typedef e_modem_mute_t
  * \brief   Modem mute state
  */
@@ -238,6 +249,18 @@ typedef enum e_modem_dwn_data
 } e_modem_dwn_data_t;
 
 /*!
+ * \typedef rf_output_e
+ * \brief  RF Output
+ */
+typedef enum rf_output_e
+{
+    MODEM_RFO_LP_LF        = 0x00,
+    MODEM_RFO_HP_LF        = 0x01,
+    MODEM_RFO_LP_AND_HP_LF = 0x02,
+    MODEM_RFO_MAX,
+} rf_output_t;
+
+/*!
  * \typedef e_modem_status_t
  * \brief   Modem Status
  */
@@ -283,6 +306,10 @@ typedef enum e_dm_info
     e_inf_streampar = 0x15,  //!< data stream parameters
     e_inf_appstatus = 0x16,  //!< application-specific status
     e_inf_alcsync   = 0x17,  //!< application layer clock sync data
+    e_inf_almstatus = 0x18,  //!< almanac status
+    e_inf_dbgrsp    = 0x19,  //!< almanac dbg response
+    e_inf_gnssloc   = 0x1A,  //!< GNSS scan NAV message
+    e_inf_wifiloc   = 0x1B,  //!< Wifi scan results message
     e_inf_max                //!< number of elements
 } e_dm_info_t;
 
@@ -296,7 +323,8 @@ static const uint8_t dm_info_field_sz[e_inf_max] = {
     [e_inf_rstcount] = 2,  [e_inf_deveui] = 8,    [e_inf_rfu_1] = 2,    [e_inf_session] = 2, [e_inf_chipeui] = 8,
     [e_inf_stream]    = 0,  // (variable-length, not sent periodically)
     [e_inf_streampar] = 2, [e_inf_appstatus] = 8,
-    [e_inf_alcsync] = 0  // (variable-length, not sent periodically)
+    [e_inf_alcsync]   = 0,  // (variable-length, not sent periodically)
+    [e_inf_almstatus] = 7
 };
 
 /*!
@@ -329,7 +357,7 @@ typedef struct s_modem_stream
 typedef struct s_modem_dwn
 {
     uint8_t  port;       //!< LoRaWAN FPort
-    uint8_t  data[255];  //!< data received
+    uint8_t  data[242];  //!< data received
     uint8_t  length;     //!< data length in byte(s)
     int16_t  rssi;       //!< RSSI is a signed value in dBm + 64
     int16_t  snr;        //!< SNR is a signed value in 0.25 dB steps
@@ -346,37 +374,19 @@ typedef struct s_dm_retrieve_pending_dl
     uint8_t up_delay;  //!< uplink delay [s]
 } s_dm_retrieve_pending_dl_t;
 
-/*!
- * \typedef modem_rsp_event_t
- * \brief   Event Overview
- */
-typedef enum modem_rsp_event
-{
-    RSP_RESET      = 0x00,  //!< Modem has been reset
-    RSP_ALARM      = 0x01,  //!< Alarm timer expired
-    RSP_JOINED     = 0x02,  //!< Network successfully joined
-    RSP_TXDONE     = 0x03,  //!< Frame transmitted
-    RSP_DOWNDATA   = 0x04,  //!< Downlink data received
-    RSP_FILEDONE   = 0x05,  //!< Fileupload completed
-    RSP_SETCONF    = 0x06,  //!< Config has been changed by DM
-    RSP_MUTE       = 0x07,  //!< Modem has been muted or un-muted by DM
-    RSP_STREAMDONE = 0x08,  //!< Stream upload completed (stream data buffer depleted)
-    RSP_LINKSTATUS = 0x09,  //!< Network connectivity status changed
-    RSP_JOINFAIL   = 0x0A,  //!< Attempt to join network failed
-    RSP_NUMBER,             //!< number of elements
-} modem_rsp_event_t;
-
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
 static const uint8_t dm_cmd_len[DM_CMD_MAX][2] = {  // CMD              = {min,       max}
-    [DM_RESET] = { 3, 3 },      [DM_FUOTA] = { 1, 255 },
-    [DM_FILE_DONE] = { 1, 1 },  [DM_GET_INFO] = { 1, 255 },
-    [DM_SET_CONF] = { 2, 255 }, [DM_REJOIN] = { 2, 2 },
-    [DM_MUTE] = { 1, 1 },       [DM_SET_DM_INFO] = { 1, e_inf_max },
-    [DM_STREAM] = { 1, 255 },   [DM_ALC_SYNC] = { 1, 255 }
+    [DM_RESET] = { 3, 3 },         [DM_FUOTA] = { 1, 255 },
+    [DM_FILE_DONE] = { 1, 1 },     [DM_GET_INFO] = { 1, 255 },
+    [DM_SET_CONF] = { 2, 255 },    [DM_REJOIN] = { 2, 2 },
+    [DM_MUTE] = { 1, 1 },          [DM_SET_DM_INFO] = { 1, e_inf_max },
+    [DM_STREAM] = { 1, 255 },      [DM_ALC_SYNC] = { 1, 255 },
+    [DM_ALM_UPDATE] = { 1, 255 },  [DM_ALM_DBG] = { 1, 255 },
+    [DM_SOLV_UPDATE] = { 1, 255 }, [DM_ALM_FUPDATE] = { 1, 255 }
 };
 
 /*

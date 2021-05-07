@@ -1,0 +1,6 @@
+<map id="smtc_modem_api.h" name="smtc_modem_api.h">
+<area shape="rect" id="node1" title="Generic Modem API description." alt="" coords="246,5,397,32"/>
+<area shape="rect" id="node2" href="$smtc__basic__modem__lr1110__api__extension_8h.html" title="Modem API extension for Basic Modem with lr1110 radio." alt="" coords="5,80,205,121"/>
+<area shape="rect" id="node3" href="$smtc__modem__test__api_8h.html" title="soft modem test API description" alt="" coords="230,87,413,114"/>
+<area shape="rect" id="node4" href="$smtc__modem__utilities_8h.html" title="modem utilities" alt="" coords="437,87,616,114"/>
+</map>

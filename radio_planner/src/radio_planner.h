@@ -45,9 +45,9 @@ extern "C" {
 
 #include "radio_planner_types.h"
 #include "radio_planner_stats.h"
-#include "radio_planner_bsp.h"
+#include "radio_planner_hal.h"
 
-#include "ral.h"
+#include "ralf.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -90,7 +90,7 @@ typedef struct radio_planner_s
     uint8_t           timer_hook_id;
     void ( *hook_callbacks[RP_NB_HOOKS] )( void* );
     rp_next_state_status_t next_state_status;
-    ral_t*                 ral;
+    const ralf_t*          radio;
 } radio_planner_t;
 
 /*
@@ -106,7 +106,7 @@ void rp_radio_irq_callback( void* obj );
 /*!
  *
  */
-void rp_init( radio_planner_t* rp, ral_t* ral );
+void rp_init( radio_planner_t* rp, const ralf_t* radio );
 
 /*!
  *
@@ -118,6 +118,10 @@ rp_hook_status_t rp_hook_init( radio_planner_t* rp, const uint8_t id, void ( *ca
  */
 rp_hook_status_t rp_hook_get_id( const radio_planner_t* rp, const void* hook, uint8_t* id );
 
+/*!
+ *
+ */
+rp_hook_status_t rp_release_hook( radio_planner_t* rp, uint8_t id );
 /*!
  * Enqueue a task to be handled by the radio planner
  *

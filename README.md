@@ -1,60 +1,75 @@
-# Features description
-
-----
-## Hardware specificities  
+# Hardware specificities  
 
 ### Reference board
-The soft modem reference board is ST Microelectronics NucleoL073 + Semtech SX1280 dev kit board
+The Basic Modem reference board is ST Microelectronics NucleoL476 + Semtech lr1110 evaluation module (China version)
 
 ### Supported Radios  
-Semtech sx1280 
+LR1110 
 
 ----
-## PROTOCOL  
+# LoRaWAN  
 
 ### Version  
-The protocol version that is currently implemented in the modem emulates LoRaWAN 1.0.3 at 2.4GHz
+The LoRaWAN version that is currently implemented in the modem is: 1.0.3
+
+### Supported Regions  
+* CN470 from Regional Parameters 1.0
 
 ----
-## Supported Modem Services 
+# Supported Modem Services 
 
-### Large files upload
+* Large files upload
+* ROSE Streaming
+* Alc_sync - Clock synchronization
+* Almanac Update
 
 # Build options
 
 ----
-## Toolchain choice
+### Toolchain choice
 
 The gcc compiler bin path can be either defined in make command via `GCC_PATH` variable either it can be added to the PATH environment variable.
-> make GCC_PATH=xxx
+> make all GCC_PATH=xxx
 
 ----
-## Clean options
+### Makefile help
 
-Clean the current build directories:  
+To see all makefile options:  
+>make help
+
+----
+### Clean options
+
+Clean the current build directory:  
 >make clean
+----
+### Full build
+
+Clean and build all:  
+>make full
 
 ----
-## Soft Modem 2G4  
->make modem_2_4  
+### Application example
 
-The Binary file will like: `/build/build_modem_2_4/soft_modem_2g4.bin`
+A geolocation application example is given as an example of modem use.
 
-----
-## General options
+### Monochannel option
 
-`-j` option can be added to the make command in order to fasten the build using all machine cores
-
-To make from scratch all the targets quickly  
->make clean; make all -j
+The project can be built for a single chanel gateway. In this case please add the `HYBRID_CHINA=yes` option to the make command
+>make full HYBRID_CHINA=yes
 
 ----
-## Hardware modem overlay
-Just add `hard_modem` after the chosen target  
-Example: to build all targets with hardware modem activated:  
->make clean; make all -j hard_modem
 
-----
-## Board options
+# Modem Use
 
-In the Makefile file, the default board `BOARD_L073` is used to compile HAL
+### Modem API
+Modem API definitions can be found in `smtc_modem_api`
+
+All generic modem functions are defined in `smtc_modem_api/smtc_modem_api.h`
+
+### Modem engine
+
+To be functional modem shall be initialized and periodically called in the main loop.
+
+These functions can be found in `smtc_modem_api/smtc_modem_utilities.h`
+

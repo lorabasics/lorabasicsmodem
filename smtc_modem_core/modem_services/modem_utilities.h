@@ -45,6 +45,11 @@ extern "C" {
 
 #include "lr1mac_defs.h"
 
+#if defined( LR1110_MODEM )
+#define START_FLASH_ADRESS ( uint32_t )( BASE_ADDR )
+#define FLASH_PROG_LEN ( uint32_t )( BASE_ADDR + 0xF4 )  // Address where is located the prog len
+#endif                                                   // LR1110_MODEM
+
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
@@ -69,8 +74,9 @@ void sha256( uint32_t* hash, const uint8_t* msg, uint32_t len );
  * \param  [in]     len*            - input buffer length
  * \retval [out]    crc             - computed crc
  */
-uint32_t crc( uint8_t* buf, int len );
-
+uint32_t crc( const uint8_t* buf, int len );
+uint8_t  crc8( const uint8_t* data, int length );
+uint32_t compute_crc_fw( void );
 #ifdef __cplusplus
 }
 #endif

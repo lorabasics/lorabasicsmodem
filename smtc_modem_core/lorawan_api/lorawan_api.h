@@ -45,8 +45,10 @@ extern "C" {
 #include <stdbool.h>  // bool type
 
 #include "lr1mac_defs.h"
+#include "lr1_stack_mac_layer.h"
 #include "smtc_real_defs.h"
 #include "radio_planner.h"
+#include "fifo_ctrl.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -72,6 +74,11 @@ extern "C" {
  * \brief Init the LoRaWAN stack
  */
 void lorawan_api_init( radio_planner_t* rp );
+
+/*!
+ * \brief
+ */
+void lorawan_rp_callback_api( radio_planner_t* rp );
 
 /*!
  * \brief Set the LoRaWAN regional parameters
@@ -167,9 +174,9 @@ void lorawan_api_join_status_clear( void );
  * \param [in]  dr_strategy_t                   DataRate Mode (describe above)
  * \param [out] None
  */
-void          lorawan_api_dr_strategy_set( dr_strategy_t adrModeSelect );
-dr_strategy_t lorawan_api_dr_strategy_get( void );
-void          lorawan_api_dr_custom_set( uint32_t DataRateCustom );
+status_lorawan_t lorawan_api_dr_strategy_set( dr_strategy_t adrModeSelect );
+dr_strategy_t    lorawan_api_dr_strategy_get( void );
+void             lorawan_api_dr_custom_set( uint32_t DataRateCustom );
 
 /*!
  * \brief   Runs the MAC layer state machine.
@@ -275,14 +282,14 @@ void lorawan_api_deveui_get( uint8_t* DevEui );
  * \param [in]  DevEUI *       Device EUI
  * \param [out] none
  */
-void lorawan_api_deveui_set( uint8_t* DevEui );
+void lorawan_api_deveui_set( const uint8_t* DevEui );
 
 /*!
  * \brief   Set the AppKey of the device
  * \param [in]  AppKey *
  * \param [out] none
  */
-void lorawan_api_app_key_set( uint8_t* AppKey );
+void lorawan_api_app_key_set( const uint8_t* AppKey );
 
 /*!
  * \brief   Get the AppEui of the device
@@ -296,7 +303,7 @@ void lorawan_api_appeui_key_get( uint8_t* AppEui );
  * \param [in]  AppEui *
  * \param [out] none
  */
-void lorawan_api_appeui_key_set( uint8_t* AppEui );
+void lorawan_api_appeui_key_set( const uint8_t* AppEui );
 
 /*!
  * \brief   Return the next transmission power
@@ -329,15 +336,23 @@ uint32_t lorawan_api_next_frequency_get( void );
  * \param [in]  none
  * \param [out] return the max data rate
  */
-uint8_t lorawan_api_max_dr_get( void );
+uint8_t lorawan_api_max_tx_dr_get( void );
 /*!
  * \brief   Return the returns the min data rate of all enabled channels
  * \remark
  * \param [in]  none
  * \param [out] return the min data rate
  */
+uint8_t lorawan_api_min_tx_dr_get( void );
 
-uint8_t lorawan_api_min_dr_get( void );
+/*!
+ * \brief   Return the returns the current data rate mask of all enabled channels
+ * \remark
+ * \param [IN]  none
+ * \param [OUT] return the mask data rate
+ */
+uint16_t lorawan_api_mask_tx_dr_channel_up_dwell_time_check( void );
+
 /*!
  * \brief   returns the current state of the MAC layer.
  * \remark  If the MAC is not in the idle state, the user cannot call any methods except the LoraWanProcess()
@@ -389,12 +404,12 @@ uint32_t lorawan_api_next_join_time_second_get( void );
  */
 int32_t lorawan_api_next_free_duty_cycle_ms_get( void );
 /*!
- * \brief   when > 0, returns the min time to perform a new uplink request
+ * \brief   Enable / disable the dutycycle
  * \remark
- * \param [in]  none
- * \param [out] return
+ * \param [in]  bool enable
+ * \param [out] status_lorawan_t
  */
-void lorawan_api_duty_cycle_enable_set( uint8_t enable );
+status_lorawan_t lorawan_api_duty_cycle_enable_set( bool enable );
 /*!
  * \brief   return the last uplink frame counter
  * \remark
@@ -403,26 +418,34 @@ void lorawan_api_duty_cycle_enable_set( uint8_t enable );
  */
 uint32_t lorawan_api_fcnt_up_get( void );
 /*!
- * \brief   return the Tx power offset
- * \remark
- * \param [in]  none
- * \param [out] return
- */
-int8_t lorawan_api_tx_power_offset_get( void );
-/*!
- * \brief   Set the Tx power offset
- * \remark
- * \param [in]  none
- * \param [out] return
- */
-void lorawan_api_tx_power_offset_set( int8_t power_off );
-/*!
  * \brief   Get the LoRaWAN hook ID in radio planner
  * \remark
  * \param [in]  none
  * \param [out] return
  */
 uint8_t lorawan_api_rp_hook_id_get( void );
+
+/*!
+ * \brief   Enable/disable class C
+ * \remark
+ * \param [in]  uint8_t
+ * \param [out] none
+ */
+void lorawan_api_class_c_enabled( bool enable );
+/*!
+ * \brief   Start class C
+ * \remark
+ * \param [in]  uint8_t
+ * \param [out] none
+ */
+void lorawan_api_class_c_start( void );
+/*!
+ * \brief   Stop class C
+ * \remark
+ * \param [in]  uint8_t
+ * \param [out] none
+ */
+void lorawan_api_class_c_stop( void );
 /*!
  * \brief   Get the downlink frame ACK bit state
  * \remark
@@ -432,22 +455,147 @@ uint8_t lorawan_api_rp_hook_id_get( void );
 uint8_t lorawan_api_rx_ack_bit_get( void );
 
 /*!
- * \brief   Get the status of the LoRaWAN certification
+ * \brief   Set the number uplink without downlink before reset stack
  * \remark
- * \param [in]  none
+ * \param  [in]  uint16_t no_rx_packet_count
+ * \retval [out] status_lorawan_t
+ */
+status_lorawan_t lorawan_api_no_rx_packet_count_config_set( uint16_t no_rx_packet_count );
+
+/*!
+ * \brief   Get the configured number of uplink without downlink before reset stack
+ * \remark
+ * \retval [out] uint16_t
+ */
+uint16_t lorawan_api_no_rx_packet_count_config_get( void );
+
+/**
+ * @brief  Get the current number of uplink without downlink before reset stack
+ *
+ * @return uint16_t
+ */
+uint16_t lorawan_api_no_rx_packet_count_current_get( void );
+
+/*!
+ * \brief   Get the number uplink without downlink in mobile mode
+ * \remark
+ * \retval [out] uint16_t
+ */
+uint16_t lorawan_api_no_rx_packet_count_in_mobile_mode_get( void );
+
+/*!
+ * \brief   Set the current counter of number uplink without downlink in mobile mode
+ * \remark
+ * \retval [in] uint32_t
+ */
+void lorawan_api_no_rx_packet_count_in_mobile_mode_set( uint16_t no_rx_packet_count );
+
+/*!
+ * \brief   Set the status of the Modem LoRaWAN certification
+ * \remark  To authorized LoRaWAN certification in modem
+ * \param [in]  uint8_t true/false
  * \param [out] return
  */
-bool lorawan_api_certification_is_enabled( void );
+void lorawan_api_modem_certification_set( uint8_t enable );
 
+/*!
+ * \brief   Get the status of the Modem LoRaWAN certification
+ * \remark  Is certification is authorized in modem
+ * \param [in]  none
+ * \param [out] return uint8_t
+ */
+uint8_t lorawan_api_modem_certification_is_enabled( void );
+
+/*!
+ * \brief   Get the status of the LoRaWAN certification
+ * \remark  Is enabled by the Test Tool
+ * \param [in]  none
+ * \param [out] return uint8_t
+ */
+uint8_t lorawan_api_certification_is_enabled( void );
 /*!
  * \brief   Api to run the LoRaWAN certification
  * \remark
  * \param [in]  none
  * \param [out] return
  */
-uint8_t lorawan_api_certification( bool new_cmd, uint8_t fport_in, uint8_t* user_fport, uint8_t* msg_type,
+uint8_t lorawan_api_certification( uint8_t new_cmd, uint8_t fport_in, uint8_t* user_fport, uint8_t* msg_type,
                                    uint8_t* user_rx_payload, uint8_t* user_rx_payload_size, uint8_t* user_payload,
                                    uint8_t* user_payload_size );
+
+/*!
+ * \brief   Api to choose the lorawan key in case of a crc error
+ * \remark  a crc error is present at the first start
+ * \param [in]  device key
+ * \param [out] none
+ */
+void lorawan_api_set_default_key( uint8_t default_app_key[16], uint8_t default_dev_eui[8],
+                                  uint8_t default_join_eui[8] );
+
+/*!
+ * \brief  return true if stack receive a link adr request
+ * \remark reset the flag automatically each time the upper layer call this function
+ * \param [in]  void
+ * \param [out] bool
+ */
+bool lorawan_api_available_link_adr_get( void );
+
+/*!
+ * \brief  return the current stack obj
+ * \remark
+ * \param [in]  void
+ * \param [out] lr1_stack_mac_t*
+ */
+lr1_stack_mac_t* lorawan_api_stack_mac_get( void );
+
+/**
+ * @brief
+ *
+ * @return fifo_ctrl_t*
+ */
+fifo_ctrl_t* lorawan_api_get_fifo_obj( void );
+
+/**
+ * @brief set network type
+ *
+ * @param network_type true : public, false : private
+ */
+void lorawan_api_set_network_type( bool network_type );
+/**
+ * @brief  get network type
+ *
+ * @return true public network
+ * @return false private network
+ */
+bool lorawan_api_get_network_type( void );
+
+/*!
+ * @brief lr1_stack_nb_trans_get
+ * @remark
+ * @return nb_trans
+ */
+uint8_t lorawan_api_nb_trans_get( void );
+
+/*!
+ * @brief lorawan_api_nb_trans_set
+ * @remark
+ * @param   nb_trans have to be smaller than 16
+ * @return status_lorawan_t
+ */
+status_lorawan_t lorawan_api_nb_trans_set( uint8_t nb_trans );
+
+/**
+ * @brief get the current crystal error
+ *
+ */
+uint32_t lorawan_api_get_crystal_error( void );
+
+/**
+ * @brief set the crystal error
+ *
+ * @param crystal_error
+ */
+void lorawan_api_set_crystal_error( uint32_t crystal_error );
 
 #ifdef __cplusplus
 }

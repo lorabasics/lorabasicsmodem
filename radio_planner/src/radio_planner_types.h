@@ -43,10 +43,10 @@ extern "C" {
 #include <stdint.h>   // C99 types
 #include <stdbool.h>  // bool type
 
-#include "smtc_bsp_dbg_trace.h"
+#include "smtc_modem_hal_dbg_trace.h"
 
 // Include radio abstraction layer
-#include "ral.h"
+#include "ralf.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -91,7 +91,7 @@ extern "C" {
 /*!
  *
  */
-#define RP_TASK_ASAP_TO_SCHEDULE_TRIG_TIME          10000  // for 10 seconds
+#define RP_TASK_ASAP_TO_SCHEDULE_TRIG_TIME          120000  // for 120 seconds
 
 /*!
  *
@@ -115,29 +115,25 @@ typedef struct rp_radio_params_s
     {
         union
         {
-            ral_params_gfsk_t   gfsk;
-            ral_params_lora_t   lora;
-            ral_params_flrc_t   flrc;
-            ral_params_lora_e_t lora_e;
-            ral_params_bpsk_t   bpsk;
+            ralf_params_gfsk_t gfsk;
+            ralf_params_lora_t lora;
         };
     } tx;
     struct
     {
         union
         {
-            ral_params_gfsk_t gfsk;
-            ral_params_lora_t lora;
-            ral_params_flrc_t flrc;
+            ralf_params_gfsk_t gfsk;
+            ralf_params_lora_t lora;
         };
         uint32_t timeout_in_ms;
         union
         {
-            ral_rx_pkt_status_gfsk_t gfsk_pkt_status;
-            ral_rx_pkt_status_lora_t lora_pkt_status;
-            ral_rx_pkt_status_flrc_t flrc_pkt_status;
+            ral_gfsk_rx_pkt_status_t gfsk_pkt_status;
+            ral_lora_rx_pkt_status_t lora_pkt_status;
         };
     } rx;
+    int16_t lbt_threshold;
 } rp_radio_params_t;
 
 /*!
@@ -150,6 +146,12 @@ typedef enum rp_task_types_e
     RP_TASK_TYPE_TX_LORA,
     RP_TASK_TYPE_TX_FSK,
     RP_TASK_TYPE_CAD,
+    RP_TASK_TYPE_GNSS_SNIFF,
+    RP_TASK_TYPE_WIFI_SNIFF,
+    RP_TASK_TYPE_GNSS_RSSI,
+    RP_TASK_TYPE_WIFI_RSSI,
+    RP_TASK_TYPE_LBT,
+    RP_TASK_TYPE_USER,
     RP_TASK_TYPE_NONE,
 } rp_task_types_t;
 
@@ -176,7 +178,10 @@ typedef enum rp_status_e
     RP_STATUS_TX_DONE,
     RP_STATUS_RX_PACKET,
     RP_STATUS_RX_TIMEOUT,
-    RP_STATUS_TASK_ABORTED
+    RP_STATUS_LBT_FREE_CHANNEL,
+    RP_STATUS_LBT_BUSY_CHANNEL,
+    RP_STATUS_TASK_ABORTED,
+    RP_STATUS_TASK_INIT,
 } rp_status_t;
 
 typedef enum rp_next_state_status_e
@@ -190,8 +195,9 @@ typedef enum rp_next_state_status_e
  */
 typedef struct rp_task_s
 {
-    uint8_t          hook_id;
-    rp_task_types_t  type;
+    uint8_t         hook_id;
+    rp_task_types_t type;
+    void ( *launch_task_callbacks )( void* );
     uint8_t          priority;
     rp_task_states_t state;
     // absolute Ms

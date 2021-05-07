@@ -1,5 +1,5 @@
 /*!
- * \file      lr1_mac_def.h
+ * \file      lr1mac_defs.h
  *
  * \brief     LoRaWan stack mac layer types definition
  *
@@ -50,6 +50,7 @@ extern "C" {
  */
 // clang-format off
 // never use #define LINK_CHECK_REQ_SIZE
+#define LINK_CHECK_REQ_SIZE             (1)
 #define LINK_CHECK_ANS_SIZE             (3)
 #define LINK_ADR_REQ_SIZE               (5)
 #define LINK_ADR_ANS_SIZE               (2)
@@ -71,8 +72,8 @@ extern "C" {
 #define MAX_RETRY_JOIN_DUTY_CYCLE_1000  (10 + MAX_RETRY_JOIN_DUTY_CYCLE_100)
 #define MIN_LORAWAN_PAYLOAD_SIZE        (12)
 #define PORTNWK                         (0)
-#define ADR_LIMIT_CONF_UP               (2)
-#define MAX_CONFUP_MSG                  (3)
+#define ADR_LIMIT_CONF_UP               (4)
+#define MAX_CONFUP_MSG                  (4)
 #define MAX_TX_PAYLOAD_SIZE             (255)
 #define FHDROFFSET                      (9)  // MHDR+FHDR offset if OPT = 0 + fport
 #define MICSIZE                         (4)
@@ -81,6 +82,22 @@ extern "C" {
 #define GFSK_CRC_SEED                   (0x1D0F)
 #define GFSK_CRC_POLYNOMIAL             (0x1021)
 
+#define SMTC_LR1MAC_DEVNONCE_SAVE_PERIOD ( 1 )
+
+#define NWK_REQ_PAYLOAD_MAX_SIZE                                                                               \
+    ( LINK_CHECK_REQ_SIZE + ( LINK_ADR_REQ_SIZE * 8 ) + DUTY_CYCLE_REQ_SIZE + RXPARRAM_SETUP_REQ_SIZE +        \
+      DEV_STATUS_REQ_SIZE + ( NEW_CHANNEL_REQ_SIZE * 16 ) + RXTIMING_SETUP_REQ_SIZE + TXPARAM_SETUP_REQ_SIZE + \
+      ( DL_CHANNEL_REQ_SIZE * 16 ) )
+#if NWK_REQ_PAYLOAD_MAX_SIZE > 255
+#undef NWK_REQ_PAYLOAD_MAX_SIZE
+#define NWK_REQ_PAYLOAD_MAX_SIZE 255
+#endif
+
+#define NWK_ANS_PAYLOAD_MAX_SIZE                                                                               \
+    ( LINK_CHECK_ANS_SIZE + ( LINK_ADR_ANS_SIZE * 8 ) + DUTY_CYCLE_ANS_SIZE + RXPARRAM_SETUP_ANS_SIZE +        \
+      DEV_STATUS_ANS_SIZE + ( NEW_CHANNEL_ANS_SIZE * 16 ) + RXTIMING_SETUP_ANS_SIZE + TXPARAM_SETUP_ANS_SIZE + \
+      ( DL_CHANNEL_ANS_SIZE * 16 ) )
+
 // if there were no rx packet before the last NO_RX_PACKET_CNT tx packets the lr1mac goes in panic
 #define NO_RX_PACKET_CNT                (2400)
 
@@ -88,7 +105,10 @@ extern "C" {
 #define UP_LINK     0
 #define DOWN_LINK   1
 
+#define MAX_FCNT_GAP 16384
+
 // clang-format on
+
 /*
  *-----------------------------------------------------------------------------------
  * --- PUBLIC MACROS ----------------------------------------------------------------
@@ -105,12 +125,12 @@ typedef enum lr1mac_states_e
     LWPSTATE_SEND,
     LWPSTATE_RX1,
     LWPSTATE_RX2,
-    LWPSTATE_PROCESS_DOWNLINK,
     LWPSTATE_UPDATE_MAC,
     LWPSTATE_TX_WAIT,
     LWPSTATE_INVALID,
     LWPSTATE_ERROR,
     LWPSTATE_DUTY_CYCLE_FULL,
+    LWPSTATE_BUSY,
 } lr1mac_states_t;
 
 /*****************************************************************************/
@@ -122,8 +142,16 @@ typedef enum lr1mac_radio_state_e
     RADIOSTATE_TXON,
     RADIOSTATE_TXFINISHED,
     RADIOSTATE_RX1FINISHED,
+    RADIOSTATE_ABORTED_BY_RP,
 } lr1mac_radio_state_t;
 
+typedef enum lr1mac_tx_status_e
+{
+    TX_BEGIN,
+    TX_ABORTED_DUTY_CYCLE,
+    TX_ABORTED_BY_RP,  // lbt or anything else
+    TX_OK,
+} lr1mac_tx_status_t;
 /********************************************************************************/
 /*                   LoraWan Mac Layer Parameters                               */
 /********************************************************************************/
@@ -197,6 +225,25 @@ typedef enum lr1mac_bandwidth_e
     BW_RFU = 255,
 } lr1mac_bandwidth_t;
 
+typedef enum lr1mac_datarate_e
+{
+    DR0 = 0,
+    DR1,
+    DR2,
+    DR3,
+    DR4,
+    DR5,
+    DR6,
+    DR7,
+    DR8,
+    DR9,
+    DR10,
+    DR11,
+    DR12,
+    DR13,
+    DR14,
+    DR15,
+} lr1mac_datarate_t;
 enum
 {
     CHANNEL_DISABLED,
@@ -216,8 +263,8 @@ typedef enum dr_strategy_e
     MOBILE_LONGRANGE_DR_DISTRIBUTION,
     MOBILE_LOWPER_DR_DISTRIBUTION,
     USER_DR_DISTRIBUTION,
-    UNKNOWN_DR,
     JOIN_DR_DISTRIBUTION,
+    UNKNOWN_DR,
 } dr_strategy_t;
 
 typedef enum status_lorawan_e
@@ -228,6 +275,7 @@ typedef enum status_lorawan_e
 
 typedef enum status_channel_e
 {
+    ERROR_CHANNEL      = -3,
     ERROR_CHANNEL_CNTL = -2,
     ERROR_CHANNEL_MASK = -1,
     OKCHANNEL          = 0,
@@ -235,7 +283,7 @@ typedef enum status_channel_e
 typedef enum rx_packet_type_e
 {
     NO_MORE_VALID_RX_PACKET,
-    // USER_RX_PACKET,
+    USER_RX_PACKET,
     USERRX_FOPTSPACKET,
     NWKRXPACKET,
     JOIN_ACCEPT_PACKET,
@@ -318,6 +366,29 @@ enum
 };
 
 /********************************************************************************/
+/*                         LORA Metadata                                        */
+/********************************************************************************/
+typedef enum receive_win_s
+{
+    RECEIVE_NONE,
+    RECEIVE_ON_RX1,
+    RECEIVE_ON_RX2,
+    RECEIVE_ON_RXC,
+    // deprecated RECEIVE_NACK       = 0x40,
+    // deprecated RECEIVE_ACK_ON_RX1 = 0x81,
+    // deprecated RECEIVE_ACK_ON_RX2 = 0x82,
+} receive_win_t;
+
+typedef struct lr1mac_down_metadata_s
+{
+    uint32_t      timestamp;
+    int16_t       rx_snr;
+    int16_t       rx_rssi;
+    uint8_t       rx_fport;
+    receive_win_t rx_window;
+} lr1mac_down_metadata_t;
+
+/********************************************************************************/
 /*                         LORA KEYS USER Specific                              */
 /********************************************************************************/
 typedef struct lorawan_keys_e
@@ -336,19 +407,19 @@ typedef struct mac_context_s
     uint8_t  appeui[8];
     uint8_t  deveui[8];
     uint8_t  appkey[16];
-    uint16_t devnonce;
-    uint16_t nb_reset;
     uint32_t adr_custom;
     uint8_t  region_type;
-    uint32_t crc;  // !! crc MUST be the last field of the structure !!
+    uint32_t rfu[3];  // bytes reserved for futur used
+    uint32_t crc;     // !! crc MUST be the last field of the structure !!
 } mac_context_t;
 
-typedef enum receive_win_s
+typedef struct lr1_counter_context_s
 {
-    RECEIVE_NONE,
-    RECEIVE_ON_RX1,
-    RECEIVE_ON_RX2,
-} receive_win_t;
+    uint16_t devnonce;
+    uint32_t nb_reset;
+    uint32_t rfu[3];  // bytes reserved for futur used
+    uint32_t crc;     // !! crc MUST be the last field of the structure !!
+} lr1_counter_context_t;
 
 typedef enum cf_list_type
 {

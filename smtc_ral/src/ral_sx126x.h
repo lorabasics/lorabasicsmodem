@@ -1,7 +1,7 @@
 /**
  * @file      ral_sx126x.h
  *
- * @brief     SX126x radio abstraction layer definition
+ * @brief     Radio abstraction layer definition
  *
  * Revised BSD License
  * Copyright Semtech Corporation 2020. All rights reserved.
@@ -29,8 +29,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __RAL_SX126X_H__
-#define __RAL_SX126X_H__
+#ifndef RAL_SX126X_H__
+#define RAL_SX126X_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,13 +43,51 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
-
 #include "ral_defs.h"
 
 /*
  * -----------------------------------------------------------------------------
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
+
+#define RAL_SX126X_DRV_INSTANTIATE                                                                                    \
+    {                                                                                                                 \
+        .handles_part = ral_sx126x_handles_part, .reset = ral_sx126x_reset, .init = ral_sx126x_init,                  \
+        .wakeup = ral_sx126x_wakeup, .set_sleep = ral_sx126x_set_sleep, .set_standby = ral_sx126x_set_standby,        \
+        .set_fs = ral_sx126x_set_fs, .set_tx = ral_sx126x_set_tx, .set_rx = ral_sx126x_set_rx,                        \
+        .set_rx_tx_fallback_mode = ral_sx126x_set_rx_tx_fallback_mode,                                                \
+        .stop_timer_on_preamble  = ral_sx126x_stop_timer_on_preamble,                                                 \
+        .set_rx_duty_cycle = ral_sx126x_set_rx_duty_cycle, .set_lora_cad = ral_sx126x_set_lora_cad,                   \
+        .set_tx_cw = ral_sx126x_set_tx_cw, .set_tx_infinite_preamble = ral_sx126x_set_tx_infinite_preamble,           \
+        .set_tx_cfg = ral_sx126x_set_tx_cfg, .set_pkt_payload = ral_sx126x_set_pkt_payload,                           \
+        .get_pkt_payload = ral_sx126x_get_pkt_payload, .get_irq_status = ral_sx126x_get_irq_status,                   \
+        .clear_irq_status         = ral_sx126x_clear_irq_status,                                                      \
+        .get_and_clear_irq_status = ral_sx126x_get_and_clear_irq_status,                                              \
+        .set_dio_irq_params = ral_sx126x_set_dio_irq_params, .set_rf_freq = ral_sx126x_set_rf_freq,                   \
+        .set_pkt_type = ral_sx126x_set_pkt_type, .set_gfsk_mod_params = ral_sx126x_set_gfsk_mod_params,               \
+        .set_gfsk_pkt_params = ral_sx126x_set_gfsk_pkt_params, .set_lora_mod_params = ral_sx126x_set_lora_mod_params, \
+        .set_lora_pkt_params = ral_sx126x_set_lora_pkt_params, .set_lora_cad_params = ral_sx126x_set_lora_cad_params, \
+        .set_lora_symb_nb_timeout = ral_sx126x_set_lora_symb_nb_timeout,                                              \
+        .set_flrc_mod_params = ral_sx126x_set_flrc_mod_params, .set_flrc_pkt_params = ral_sx126x_set_flrc_pkt_params, \
+        .get_gfsk_rx_pkt_status = ral_sx126x_get_gfsk_rx_pkt_status,                                                  \
+        .get_lora_rx_pkt_status = ral_sx126x_get_lora_rx_pkt_status,                                                  \
+        .get_flrc_rx_pkt_status = ral_sx126x_get_flrc_rx_pkt_status, .get_rssi_inst = ral_sx126x_get_rssi_inst,       \
+        .get_lora_time_on_air_in_ms = ral_sx126x_get_lora_time_on_air_in_ms,                                          \
+        .get_gfsk_time_on_air_in_ms = ral_sx126x_get_gfsk_time_on_air_in_ms,                                          \
+        .get_flrc_time_on_air_in_ms = ral_sx126x_get_flrc_time_on_air_in_ms,                                          \
+        .set_gfsk_sync_word = ral_sx126x_set_gfsk_sync_word, .set_lora_sync_word = ral_sx126x_set_lora_sync_word,     \
+        .set_flrc_sync_word = ral_sx126x_set_flrc_sync_word, .set_gfsk_crc_params = ral_sx126x_set_gfsk_crc_params,   \
+        .set_flrc_crc_params           = ral_sx126x_set_flrc_crc_params,                                              \
+        .set_gfsk_whitening_seed       = ral_sx126x_set_gfsk_whitening_seed,                                          \
+        .get_tx_consumption_in_ua      = ral_sx126x_get_tx_consumption_in_ua,                                         \
+        .get_gfsk_rx_consumption_in_ua = ral_sx126x_get_gfsk_rx_consumption_in_ua,                                    \
+        .get_lora_rx_consumption_in_ua = ral_sx126x_get_lora_rx_consumption_in_ua,                                    \
+    }
+
+#define RAL_SX126X_INSTANTIATE( ctx )                         \
+    {                                                         \
+        .context = ctx, .driver = RAL_SX126X_DRV_INSTANTIATE, \
+    }
 
 /*
  * -----------------------------------------------------------------------------
@@ -67,362 +105,258 @@ extern "C" {
  */
 
 /**
- * Radio initialization
- *
- * @param [in] radio Pointer to radio data to be initialized
- *
- * @retval status Operation status
+ * @see ral_handles_part
  */
-ral_status_t ral_sx126x_init( const ral_t* ral );
+bool ral_sx126x_handles_part( const char* part_number );
 
 /**
- * Setup radio to transmit and receive data using GFSK modem
- *
- * @remark When transmitting in GFSK mode the radio access may be blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_reset
  */
-ral_status_t ral_sx126x_setup_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
+ral_status_t ral_sx126x_reset( const void* context );
 
 /**
- * Setup radio to receive data using GFSK modem
- *
- * @remark When receiving in GFSK mode the radio access may be blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem reception parameters
- *
- * @retval status Operation status
+ * @see ral_init
  */
-ral_status_t ral_sx126x_setup_rx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
+ral_status_t ral_sx126x_init( const void* context );
 
 /**
- * Setup radio to transmit data using GFSK modem
- *
- * @remark When transmitting in GFSK mode the radio access may be blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params GFSK modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_wakeup
  */
-ral_status_t ral_sx126x_setup_tx_gfsk( const ral_t* ral, const ral_params_gfsk_t* params );
+ral_status_t ral_sx126x_wakeup( const void* context );
 
 /**
- * Setup radio to transmit and receive data using LoRa modem
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_set_sleep
  */
-ral_status_t ral_sx126x_setup_lora( const ral_t* ral, const ral_params_lora_t* params );
+ral_status_t ral_sx126x_set_sleep( const void* context, const bool retain_config );
 
 /**
- * Setup radio to receive data using LoRa modem
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem reception parameters
- *
- * @retval status Operation status
+ * @see ral_set_standby
  */
-ral_status_t ral_sx126x_setup_rx_lora( const ral_t* ral, const ral_params_lora_t* params );
+ral_status_t ral_sx126x_set_standby( const void* context, ral_standby_cfg_t standby_cfg );
 
 /**
- * Setup radio to transmit data using LoRa modem
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRa modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_set_fs
  */
-ral_status_t ral_sx126x_setup_tx_lora( const ral_t* ral, const ral_params_lora_t* params );
+ral_status_t ral_sx126x_set_fs( const void* context );
 
 /**
- * Setup radio to transmit and receive data using FLRC modem
- *
- * @remark Not all radios have this modem available
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_set_tx
  */
-ral_status_t ral_sx126x_setup_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+ral_status_t ral_sx126x_set_tx( const void* context );
 
 /**
- * Setup radio to receive data using FLRC modem
- *
- * @remark Not all radios have this modem available
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem reception parameters
- *
- * @retval status Operation status
+ * @see ral_set_rx
  */
-ral_status_t ral_sx126x_setup_rx_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+ral_status_t ral_sx126x_set_rx( const void* context, const uint32_t timeout_in_ms );
 
 /**
- * Setup radio to transmit data using FLRC modem
- *
- * @remark Not all radios have this modem available
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params FLRC modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_set_rx_tx_fallback_mode
  */
-ral_status_t ral_sx126x_setup_tx_flrc( const ral_t* ral, const ral_params_flrc_t* params );
+ral_status_t ral_sx126x_set_rx_tx_fallback_mode( const void* context, const ral_fallback_modes_t ral_fallback_mode );
 
 /**
- * Setup radio to transmit data using LoRaE modem
- *
- * @remark Not all radios have this modem available
- *
- * @remark When transmitting in LoRaE mode the radio access may be blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params LoRaE modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_stop_timer_on_preamble
  */
-ral_status_t ral_sx126x_setup_tx_lora_e( const ral_t* ral, const ral_params_lora_e_t* params );
+ral_status_t ral_sx126x_stop_timer_on_preamble( const void* context, const bool enable );
 
 /**
- * Setup radio and starts data transmission using BPSK modem
- *
- * @remark Not all radios have this modem available
- *
- * @remark When transmitting in BPSK mode the radio access is blocking
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params BPSK modem transmission parameters
- *
- * @retval status Operation status
+ * @see ral_set_rx_duty_cycle
  */
-ral_status_t ral_sx126x_tx_bpsk( const ral_t* ral, const ral_params_bpsk_t* params );
+ral_status_t ral_sx126x_set_rx_duty_cycle( const void* context, const uint32_t rx_time_in_ms,
+                                           const uint32_t sleep_time_in_ms );
 
 /**
- * Setup radio in cad mode
- *
- * @remark Not all radios have this feature available
- *
- * @param [in] radio Pointer to radio data
- * @param [in] params CAD operation parameters
- *
- * @retval status Operation status
+ * @see ral_set_lora_cad
  */
-ral_status_t ral_sx126x_setup_cad( const ral_t* ral, const ral_lora_cad_params_t* params );
+ral_status_t ral_sx126x_set_lora_cad( const void* context );
 
 /**
- * Fills radio transmission buffer
- *
- * @param [in] radio Pointer to radio data
- * @param [in] buffer Pointer to the buffer to be transmitted
- * @param [in] size   Size of the buffer to be transmitted
- *
- * @retval status Operation status
+ * @see ral_set_tx_cw
  */
-ral_status_t ral_sx126x_set_pkt_payload( const ral_t* ral, const uint8_t* buffer, const uint16_t size );
+ral_status_t ral_sx126x_set_tx_cw( const void* context );
 
 /**
- * Fetches radio reception buffer
- *
- * @param [in]  radio      Pointer to radio data
- * @param [out] buffer     Pointer to the buffer to be filled with received data
- * @param [in]  max_size   Size of user-provided buffer
- * @param [out] size       If non-zero, received packet size will be put here
- * @param [out] pkt_status Pointer a structure that will contain the Rx packet
- * status
- *
- * @retval status Operation status
+ * @see ral_set_tx_infinite_preamble
  */
-ral_status_t ral_sx126x_get_pkt_payload( const ral_t* ral, uint8_t* buffer, uint16_t max_size, uint16_t* size );
+ral_status_t ral_sx126x_set_tx_infinite_preamble( const void* context );
 
 /**
- * Fetches packet status
- *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
- *
- * @retval status Operation status
+ * @see ral_set_tx_cfg
  */
-ral_status_t ral_sx126x_get_gfsk_pkt_status( const ral_t* ral, ral_rx_pkt_status_gfsk_t* pkt_status );
+ral_status_t ral_sx126x_set_tx_cfg( const void* context, const int8_t output_pwr_in_dbm, const uint32_t rf_freq_in_hz );
 
 /**
- * Fetches packet status
- *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
- *
- * @retval status Operation status
+ * @see ral_set_pkt_payload
  */
-ral_status_t ral_sx126x_get_lora_pkt_status( const ral_t* ral, ral_rx_pkt_status_lora_t* pkt_status );
+ral_status_t ral_sx126x_set_pkt_payload( const void* context, const uint8_t* buffer, const uint16_t size );
 
 /**
- * Fetches packet status
- *
- * @param [in]  radio      Pointer to radio data
- * @param [out] pkt_status Pointer a structure that will contain the packet
- * status status
- *
- * @retval status Operation status
+ * @see ral_get_pkt_payload
  */
-ral_status_t ral_sx126x_get_flrc_pkt_status( const ral_t* ral, ral_rx_pkt_status_flrc_t* pkt_status );
+ral_status_t ral_sx126x_get_pkt_payload( const void* context, uint16_t max_size_in_bytes, uint8_t* buffer,
+                                         uint16_t* size_in_bytes );
 
 /**
- * Radio is set in Sleep mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_get_irq_status
  */
-ral_status_t ral_sx126x_set_sleep( const ral_t* ral );
+ral_status_t ral_sx126x_get_irq_status( const void* context, ral_irq_t* irq );
 
 /**
- * Radio is set in Standby mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_clear_irq_status
  */
-ral_status_t ral_sx126x_set_standby( const ral_t* ral );
+ral_status_t ral_sx126x_clear_irq_status( const void* context, const ral_irq_t irq );
 
 /**
- * Radio is set in Tx mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_get_and_clear_irq_status
  */
-ral_status_t ral_sx126x_set_tx( const ral_t* ral );
+ral_status_t ral_sx126x_get_and_clear_irq_status( const void* context, ral_irq_t* irq );
 
 /**
- * Radio is set in Tx CW mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_dio_irq_params
  */
-ral_status_t ral_sx126x_set_tx_cw( const ral_t* ral );
+ral_status_t ral_sx126x_set_dio_irq_params( const void* context, const ral_irq_t irq );
 
 /**
- * Radio is set in Rx mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_rf_freq
  */
-ral_status_t ral_sx126x_set_rx( const ral_t* ral, const uint32_t timeout_ms );
+ral_status_t ral_sx126x_set_rf_freq( const void* context, const uint32_t freq_in_hz );
 
 /**
- * Radio is set in CAD mode
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_pkt_type
  */
-ral_status_t ral_sx126x_set_cad( const ral_t* ral );
+ral_status_t ral_sx126x_set_pkt_type( const void* context, const ral_pkt_type_t pkt_type );
 
 /**
- * Gets current radio irq status
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_gfsk_mod_params
  */
-ral_status_t ral_sx126x_get_irq_status( const ral_t* ral, ral_irq_t* ral_irq );
+ral_status_t ral_sx126x_set_gfsk_mod_params( const void* context, const ral_gfsk_mod_params_t* params );
 
 /**
- * Clears radio irq status
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_gfsk_pkt_params
  */
-ral_status_t ral_sx126x_clear_irq_status( const ral_t* ral, const ral_irq_t ral_irq );
+ral_status_t ral_sx126x_set_gfsk_pkt_params( const void* context, const ral_gfsk_pkt_params_t* params );
 
 /**
- * Clears any radio irq status flags that are set and returns the flags that
- * were cleared.
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_lora_mod_params
  */
-ral_status_t ral_sx126x_get_and_clear_irq_status( const ral_t* ral, ral_irq_t* ral_irq );
+ral_status_t ral_sx126x_set_lora_mod_params( const void* context, const ral_lora_mod_params_t* params );
 
 /**
- * Enable interrupts. If the chip has several IRQ lines, the first is used.
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_lora_pkt_params
  */
-ral_status_t ral_sx126x_set_dio_irq_params( const ral_t* ral, const ral_irq_t ral_irq );
+ral_status_t ral_sx126x_set_lora_pkt_params( const void* context, const ral_lora_pkt_params_t* params );
 
 /**
- * Gets current RSSI value
- *
- * @param [in] radio Pointer to radio data
- *
- * @retval status Operation status
+ * @see ral_set_lora_cad_params
  */
-ral_status_t ral_sx126x_get_rssi( const ral_t* ral, int16_t* rssi );
+ral_status_t ral_sx126x_set_lora_cad_params( const void* context, const ral_lora_cad_params_t* params );
 
 /**
- * Gets time on air, in milliseconds
- *
- * @param [in] params Modem transmission parameters
- * @param [out] toa   Time on air
- *
- * @retval status Operation status
+ * @see ral_set_lora_symb_nb_timeout
  */
-ral_status_t ral_sx126x_get_lora_time_on_air_in_ms( const ral_params_lora_t* params, uint32_t* toa );
+ral_status_t ral_sx126x_set_lora_symb_nb_timeout( const void* context, const uint8_t nb_of_symbs );
 
 /**
- * Gets time on air, in milliseconds
- *
- * @param [in] params Modem transmission parameters
- * @param [out] toa   Time on air
- *
- * @retval status Operation status
+ * @see ral_set_flrc_mod_params
  */
-ral_status_t ral_sx126x_get_gfsk_time_on_air_in_ms( const ral_params_gfsk_t* params, uint32_t* toa );
+ral_status_t ral_sx126x_set_flrc_mod_params( const void* context, const ral_flrc_mod_params_t* params );
 
 /**
- * Gets register values
- *
- * @param [in]  radio Pointer to radio data
- * @param [in]  address Address of the first register to read
- * @param [out] buffer Pointer to store data
- * @param [in]  size Number of bytes to read
- *
- * @retval status Operation status
+ * @see ral_set_flrc_pkt_params
  */
-ral_status_t ral_sx126x_read_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size );
+ral_status_t ral_sx126x_set_flrc_pkt_params( const void* context, const ral_flrc_pkt_params_t* params );
 
 /**
- * Write register values
- *
- * @param [in] radio Pointer to radio data
- * @param [in] address Address of the first register to write
- * @param [in] buffer Pointer to store data
- * @param [in] size Number of bytes to write
- *
- * @retval status Operation status
+ * @see ral_get_gfsk_rx_pkt_status
  */
-ral_status_t ral_sx126x_write_register( const ral_t* ral, uint16_t address, uint8_t* buffer, uint16_t size );
+ral_status_t ral_sx126x_get_gfsk_rx_pkt_status( const void* context, ral_gfsk_rx_pkt_status_t* rx_pkt_status );
 
+/**
+ * @see ral_get_lora_rx_pkt_status
+ */
+ral_status_t ral_sx126x_get_lora_rx_pkt_status( const void* context, ral_lora_rx_pkt_status_t* rx_pkt_status );
+
+/**
+ * @see ral_get_flrc_rx_pkt_status
+ */
+ral_status_t ral_sx126x_get_flrc_rx_pkt_status( const void* context, ral_flrc_rx_pkt_status_t* rx_pkt_status );
+
+/**
+ * @see ral_get_rssi_inst
+ */
+ral_status_t ral_sx126x_get_rssi_inst( const void* context, int16_t* rssi_in_dbm );
+
+/**
+ * @see ral_get_lora_time_on_air_in_ms
+ */
+uint32_t ral_sx126x_get_lora_time_on_air_in_ms( const ral_lora_pkt_params_t* pkt_p,
+                                                const ral_lora_mod_params_t* mod_p );
+
+/**
+ * @see ral_get_gfsk_time_on_air_in_ms
+ */
+uint32_t ral_sx126x_get_gfsk_time_on_air_in_ms( const ral_gfsk_pkt_params_t* pkt_p,
+                                                const ral_gfsk_mod_params_t* mod_p );
+
+/**
+ * @see ral_get_flrc_time_on_air_in_ms
+ */
+uint32_t ral_sx126x_get_flrc_time_on_air_in_ms( const ral_flrc_pkt_params_t* pkt_p,
+                                                const ral_flrc_mod_params_t* mod_p );
+/**
+ * @see ral_set_gfsk_sync_word
+ */
+ral_status_t ral_sx126x_set_gfsk_sync_word( const void* context, const uint8_t* sync_word,
+                                            const uint8_t sync_word_len );
+
+/**
+ * @see ral_set_lora_sync_word
+ */
+ral_status_t ral_sx126x_set_lora_sync_word( const void* context, const uint8_t sync_word );
+
+/**
+ * @see ral_set_flrc_sync_word
+ */
+ral_status_t ral_sx126x_set_flrc_sync_word( const void* context, const uint8_t* sync_word,
+                                            const uint8_t sync_word_len );
+
+/**
+ * @see ral_set_gfsk_crc_params
+ */
+ral_status_t ral_sx126x_set_gfsk_crc_params( const void* context, const uint16_t seed, const uint16_t polynomial );
+
+/**
+ * @see ral_set_flrc_crc_params
+ */
+ral_status_t ral_sx126x_set_flrc_crc_params( const void* context, const uint32_t seed );
+
+/**
+ * @see ral_set_gfsk_whitening_seed
+ */
+ral_status_t ral_sx126x_set_gfsk_whitening_seed( const void* context, const uint16_t seed );
+
+/**
+ * @see ral_get_tx_consumption_in_ua
+ */
+ral_status_t ral_sx126x_get_tx_consumption_in_ua( const void* context, const int8_t output_pwr_in_dbm,
+                                                  const uint32_t rf_freq_in_hz, uint32_t* pwr_consumption_in_ua );
+
+/**
+ * @see ral_get_gfsk_rx_consumption_in_ua
+ */
+ral_status_t ral_sx126x_get_gfsk_rx_consumption_in_ua( const void* context, const uint32_t br_in_bps,
+                                                       const uint32_t bw_dsb_in_hz, const bool rx_boosted,
+                                                       uint32_t* pwr_consumption_in_ua );
+
+/**
+ * @see ral_get_lora_rx_consumption_in_ua
+ */
+ral_status_t ral_sx126x_get_lora_rx_consumption_in_ua( const void* context, const ral_lora_bw_t bw,
+                                                       const bool rx_boosted, uint32_t* pwr_consumption_in_ua );
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // __RAL_SX126X_H__
+#endif  // RAL_SX126X_H__
 
 /* --- EOF ------------------------------------------------------------------ */

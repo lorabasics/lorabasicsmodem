@@ -42,6 +42,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "ral_defs.h"
+#include "lr1mac_defs.h"
 /*
  *-----------------------------------------------------------------------------------
  * --- PUBLIC MACROS ----------------------------------------------------------------
@@ -65,6 +66,17 @@ extern "C" {
  */
 #define MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
 
+uint8_t SMTC_GET_BIT8( const uint8_t* array, uint8_t index );
+void    SMTC_SET_BIT8( uint8_t* array, uint8_t index );
+void    SMTC_CLR_BIT8( uint8_t* array, uint8_t index );
+void    SMTC_PUT_BIT8( uint8_t* array, uint8_t index, uint8_t bit );
+uint8_t SMTC_ARE_CLR_BYTE8( uint8_t* array, uint8_t length );
+
+uint8_t SMTC_GET_BIT16( const uint16_t* array, uint8_t index );
+void    SMTC_SET_BIT16( uint16_t* array, uint8_t index );
+void    SMTC_CLR_BIT16( uint16_t* array, uint8_t index );
+void    SMTC_PUT_BIT16( uint16_t* array, uint8_t index, uint8_t bit );
+uint8_t SMTC_ARE_CLR_BYTE16( uint16_t* array, uint8_t length );
 /*
  *-----------------------------------------------------------------------------------
  *--- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------------
@@ -82,18 +94,36 @@ extern "C" {
 void memcpy1( uint8_t* dst, const uint8_t* src, uint16_t size );
 
 /*!
- * \brief Set size elements of dst array with value
+ * \brief Reverse copy size elements of src
+ * array to dst array
  *
- * \remark STM32 Standard memset function only works on pointers that are aligned
+ * \remark STM32 Standard memcpy function only
+ * works on pointers that are aligned
+ *
+ * \param [OUT] dst   Destination array
+ * \param [IN]  src   Source array
+ * \param [IN]  size  Number of bytes to be
+ * copied
+ */
+void memcpy1_r( uint8_t* dst, const uint8_t* src, uint16_t size );
+
+/*!
+ * \brief Set size elements of dst array with
+ * value
+ *
+ * \remark STM32 Standard memset function only
+ * works on pointers that are aligned
  *
  * \param [OUT] dst   Destination array
  * \param [IN]  value Default value
- * \param [IN]  size  Number of bytes to be copied
+ * \param [IN]  size  Number of bytes to be
+ * copied
  */
 void memset1( uint8_t* dst, uint8_t value, uint16_t size );
 
 /*!
- * \brief Crc32 implementation for flash corruption
+ * \brief Crc32 implementation for flash
+ * corruption
  *
  */
 uint32_t lr1mac_utilities_crc( uint8_t* buf, int len );
@@ -103,6 +133,39 @@ uint32_t lr1mac_utilities_crc( uint8_t* buf, int len );
  *
  */
 uint32_t lr1mac_utilities_get_symb_time_us( const uint16_t nb_symb, const ral_lora_sf_t sf, const ral_lora_bw_t bw );
+
+/*!
+ * \brief is valid Rx payload min size
+ *
+ */
+status_lorawan_t lr1mac_rx_payload_min_size_check( uint8_t rx_payload_size );
+
+/*!
+ * \brief Extract MHDR
+ *
+ */
+status_lorawan_t lr1mac_rx_mhdr_extract( uint8_t* rx_payload, uint8_t* rx_mtype, uint8_t* rx_major,
+                                         uint8_t* tx_ack_bit );
+
+/*!
+ * \brief Extract FHDR
+ *
+ */
+int lr1mac_rx_fhdr_extract( uint8_t* rx_payload, uint8_t rx_payload_size, uint8_t* rx_fopts_length,
+                            uint16_t* fcnt_dwn_tmp, uint32_t dev_addr, uint8_t* rx_fport, uint8_t* rx_payload_empty,
+                            uint8_t* rx_fctrl, uint8_t* rx_fopts );
+/*!
+ * \brief Extract MHDR
+ *
+ */
+int lr1mac_fcnt_dwn_accept( uint16_t fcnt_dwn_tmp, uint32_t* fcnt_lorawan );
+
+/*!
+ * \brief Check Dev address type
+ *
+ */
+valid_dev_addr_t lr1mac_check_dev_addr( uint32_t dev_addr_unicast, uint32_t* dev_addr_multi_cast,
+                                        uint8_t nb_dev_addr_multi_cast, uint32_t dev_addr_to_test );
 
 #ifdef __cplusplus
 }
