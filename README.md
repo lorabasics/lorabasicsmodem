@@ -1,3 +1,16 @@
+---
+---
+
+# Notice: LoRa Basics Modem (SWL200L) v1.0.x has been retired effective 2024-07-01.
+
+The LoRa Basics Modem L2 library (SWL200L) will receive no further enhancements and/or bug fixes. Going forward, the L2 library and usage examples are bundled within the LoRa Basics Modem L2 library release v4.5.0 (and onward) development repository (http://github.com/lora-net/SWL2001/tree/v4.5.0). The  examples included in the SWL2001 repository target application use-cases instead of atomic demonstrations of functionality. The SWL2001 repository now contains multiple reference implementations targeting different MCU and RTOS architectures and as such offers more example code regarding how to port LBM to new platforms.
+
+Support requests for earlier versions should be directed to https://semtech.my.site.com/ldp/ldp_support
+
+
+----
+----
+
 # Features description
 
 ----
